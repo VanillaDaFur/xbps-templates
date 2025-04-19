@@ -1,0 +1,22 @@
+# Template file for 'rofi-wayland'
+pkgname=rofi-wayland
+version=1.7.8+wayland1
+revision=1
+build_style=meson
+configure_args="-Dxcb=disabled -Dcheck=disabled"
+hostmakedepends="ninja flex bison glib-devel pkg-config wayland-devel"
+makedepends="gdk-pixbuf-devel libxkbcommon-devel pango-devel
+ wayland-protocols wayland-devel"
+checkdepends="check-devel cppcheck xkeyboard-config"
+short_desc="Window switcher, run dialog and dmenu replacement (Wayland fork)"
+maintainer="VanillaDaFur <snowydafur@protonmail.com>"
+license="MIT"
+homepage="https://github.com/lbonn/rofi"
+distfiles="https://github.com/lbonn/rofi/releases/download/${version}/rofi-${version}.tar.gz"
+checksum="45ec7c8e8484b2e18b9abeaf54fe1d64e7b7fe4fd1c589559a544dd3c81af7c8"
+replaces="rofi>=0"
+conflicts="rofi>=0"
+
+post_install() {
+	vlicense COPYING
+}

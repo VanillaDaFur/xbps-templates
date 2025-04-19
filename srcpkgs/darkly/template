@@ -1,0 +1,20 @@
+# Template file for 'darkly'
+pkgname=darkly
+version=0.5.18
+revision=1
+arch=x86_64
+archs="x86_64"
+build_style=meta
+hostmakedepends="tar zstd"
+short_desc="Darkly QT theme, fork of lightly"
+maintainer="VanillaDaFur <SnowyDaFur@protonmail.com>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/Bali10050/Darkly"
+distfiles="https://github.com/Bali10050/Darkly/releases/download/v${version}/darkly-${version}-${arch}.pkg.zst"
+checksum=3c6699b879468f93c4a86709d606f21aa471cf3cdc736ee441c2cacef8d90cc8
+
+do_install() {
+	mkdir -p "${DESTDIR}"
+	tar -xvf ${XBPS_SRCDISTDIR}/${pkgname}-${version}/${pkgname}-${version}-${arch}.pkg.zst -C "${DESTDIR}"
+}
+
