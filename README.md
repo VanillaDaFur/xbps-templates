@@ -7,4 +7,4 @@ Currently added templates
 | darkly              |
 | rofi-wayland        |
 | vesktop             |
-
+| linux-zen           |
