@@ -1,0 +1,22 @@
+# Template file for 'ttf-jetbrains-mono-nerd'
+pkgname=ttf-jetbrains-mono-nerd
+version=3.4.0
+revision=1
+arch=x86_64
+archs="x86_64"
+build_style=meta
+hostmakedepends="unzip"
+depends="font-util"
+short_desc="Patched font JetBrains Mono from nerd fonts library"
+maintainer="VanillaDaFur <SnowyDaFur@protonmail.com>"
+license="MIT"
+homepage="https://github.com/ryanoasis/nerd-fonts"
+distfiles="https://github.com/ryanoasis/nerd-fonts/releases/download/v${version}/JetBrainsMono.zip"
+checksum=76f05ff3ace48a464a6ca57977998784ff7bdbb65a6d915d7e401cd3927c493c
+font_dirs="/usr/share/fonts/TTF"
+
+do_install() {
+	mkdir -p "${DESTDIR}/usr/share/fonts"
+	unzip ${XBPS_SRCDISTDIR}/${pkgname}-${version}/JetBrainsMono.zip -d "${DESTDIR}/usr/share/fonts/TTF"
+}
+
