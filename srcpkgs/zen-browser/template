@@ -1,0 +1,40 @@
+# Template file for 'zen-browser'
+pkgname=zen-browser
+version=1.12b
+revision=1
+archs="x86_64"
+hostmakedepends="tar xz"
+short_desc="Performance oriented Firefox-based web browser"
+maintainer="VanillaDaFur <SnowyDaFur@protonmail.com>"
+license="MPL-2.0"
+homepage="https://github.com/zen-browser/desktop"
+distfiles="https://github.com/zen-browser/desktop/releases/download/${version}/zen.linux-x86_64.tar.xz"
+checksum=76aa9feee9fae5a0de916ec99170d944bfb254303907f499eb3dee38bcc45eef
+depends="nss>=3.72 nspr>=4.32 desktop-file-utils hicolor-icon-theme pciutils"
+
+do_install() {
+  # Extracting
+	vmkdir usr/lib/zen-browser
+	vcopy * usr/lib/zen-browser
+
+  # Linking binary to a /usr/bin directory
+	vmkdir usr/bin/
+	ln -sf ../lib/zen-browser/zen "${DESTDIR}"/usr/bin/zen
+
+  # Installing default icons
+	for i in 16x16 32x32 48x48 64x64 128x128; do
+		vinstall browser/chrome/icons/default/default${i%x*}.png 644 \
+			usr/share/icons/hicolor/${i}/apps zen-browser.png
+	done
+  # Creating .desktop file
+	install -d "${DESTDIR}"/usr/share/applications
+	cat <<EOF > "${DESTDIR}/usr/share/applications/zen-browser.desktop"
+[Desktop Entry]
+Name=Zen browser
+Terminal=false
+Exec=zen %u
+Icon=zen-browser
+Type=Application
+Categories=Network;WebBrowser;
+EOF
+}
