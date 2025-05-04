@@ -30,7 +30,7 @@ do_install() {
 	install -d "${DESTDIR}"/usr/share/applications
 	cat <<EOF > "${DESTDIR}/usr/share/applications/zen-browser.desktop"
 [Desktop Entry]
-Name=Zen browser
+Name=Zen Browser
 Terminal=false
 Exec=zen %u
 Icon=zen-browser
