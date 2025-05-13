@@ -1,3 +1,5 @@
+ Documentation/ABI/testing/sysfs-devices-system-cpu |    1 +
+ .../admin-guide/hw-vuln/old_microcode.rst          |   21 +
  Documentation/admin-guide/kernel-parameters.txt    |   12 +
  Documentation/admin-guide/sysctl/kernel.rst        |    9 +
  Documentation/scheduler/sched-BMQ.txt              |  110 +
@@ -21,7 +23,7 @@
  arch/x86/entry/syscalls/syscall_32.tbl             |    3 +
  arch/x86/entry/syscalls/syscall_64.tbl             |    3 +
  arch/x86/hyperv/mmu.c                              |    1 -
- arch/x86/include/asm/cpufeatures.h                 |    1 +
+ arch/x86/include/asm/cpufeatures.h                 |    3 +
  arch/x86/include/asm/disabled-features.h           |    8 +-
  arch/x86/include/asm/mmu.h                         |   12 +
  arch/x86/include/asm/mmu_context.h                 |   10 +-
@@ -34,6 +36,9 @@
  arch/x86/include/asm/tlbflush.h                    |   70 +
  arch/x86/include/asm/vermagic.h                    |   72 +
  arch/x86/kernel/cpu/amd.c                          |   10 +
+ arch/x86/kernel/cpu/bugs.c                         |   16 +
+ arch/x86/kernel/cpu/common.c                       |   42 +
+ arch/x86/kernel/cpu/microcode/intel-ucode-defs.h   |  150 +
  arch/x86/kernel/kvm.c                              |    1 -
  arch/x86/kernel/paravirt.c                         |   16 -
  arch/x86/mm/pgtable.c                              |   27 +-
@@ -46,18 +51,17 @@
  drivers/Makefile                                   |   13 +-
  drivers/ata/ahci.c                                 |   23 +-
  drivers/ata/libahci.c                              |    2 +-
+ drivers/base/cpu.c                                 |    3 +
  drivers/cpufreq/Kconfig.x86                        |    2 -
  drivers/cpufreq/cpufreq_ondemand.c                 |   10 +-
  drivers/cpufreq/intel_pstate.c                     |    2 +
  drivers/firmware/sysfb.c                           |   18 +-
  drivers/gpu/drm/amd/amdgpu/amdgpu.h                |    1 +
  drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c            |   10 +
- drivers/gpu/drm/amd/amdgpu/mes_v11_0.c             |    4 +
  drivers/gpu/drm/amd/pm/amdgpu_pm.c                 |    3 +
  drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c          |   14 +-
  drivers/input/evdev.c                              |   19 +-
  drivers/md/dm-crypt.c                              |    5 +
- .../net/wireless/intel/iwlwifi/pcie/trans-gen2.c   |    8 +-
  drivers/pci/controller/Makefile                    |    6 +
  drivers/pci/controller/intel-nvme-remap.c          |  462 ++
  drivers/pci/quirks.c                               |  101 +
@@ -68,6 +72,7 @@
  drivers/scsi/vhba/vhba.c                           | 1132 +++
  fs/proc/base.c                                     |    2 +-
  include/asm-generic/resource.h                     |    2 +-
+ include/linux/cpu.h                                |    2 +
  include/linux/mm.h                                 |    2 +-
  include/linux/pageblock-flags.h                    |    4 +
  include/linux/sched.h                              |   40 +-
@@ -149,10 +154,49 @@
  tools/arch/x86/include/asm/msr-index.h             |    2 +
  tools/perf/arch/powerpc/entry/syscalls/syscall.tbl |    3 +
  tools/perf/arch/s390/entry/syscalls/syscall.tbl    |    3 +
- 151 files changed, 15745 insertions(+), 723 deletions(-)
+ 156 files changed, 15971 insertions(+), 722 deletions(-)
 
+diff --git a/Documentation/ABI/testing/sysfs-devices-system-cpu b/Documentation/ABI/testing/sysfs-devices-system-cpu
+index 206079d3bd5b127b0ccddfd4be50c978563a0b46..766a9747b154ff5480c54adfe90e5c4af27cb895 100644
+--- a/Documentation/ABI/testing/sysfs-devices-system-cpu
++++ b/Documentation/ABI/testing/sysfs-devices-system-cpu
+@@ -516,6 +516,7 @@ What:		/sys/devices/system/cpu/vulnerabilities
+ 		/sys/devices/system/cpu/vulnerabilities/mds
+ 		/sys/devices/system/cpu/vulnerabilities/meltdown
+ 		/sys/devices/system/cpu/vulnerabilities/mmio_stale_data
++		/sys/devices/system/cpu/vulnerabilities/old_microcode
+ 		/sys/devices/system/cpu/vulnerabilities/reg_file_data_sampling
+ 		/sys/devices/system/cpu/vulnerabilities/retbleed
+ 		/sys/devices/system/cpu/vulnerabilities/spec_store_bypass
+diff --git a/Documentation/admin-guide/hw-vuln/old_microcode.rst b/Documentation/admin-guide/hw-vuln/old_microcode.rst
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ded8f86b8d06a6641cba7d9cad67925da9e079a
+--- /dev/null
++++ b/Documentation/admin-guide/hw-vuln/old_microcode.rst
+@@ -0,0 +1,21 @@
++.. SPDX-License-Identifier: GPL-2.0
++
++=============
++Old Microcode
++=============
++
++The kernel keeps a table of released microcode. Systems that had
++microcode older than this at boot will say "Vulnerable".  This means
++that the system was vulnerable to some known CPU issue. It could be
++security or functional, the kernel does not know or care.
++
++You should update the CPU microcode to mitigate any exposure. This is
++usually accomplished by updating the files in
++/lib/firmware/intel-ucode/ via normal distribution updates. Intel also
++distributes these files in a github repo:
++
++	https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files.git
++
++Just like all the other hardware vulnerabilities, exposure is
++determined at boot. Runtime microcode updates do not change the status
++of this vulnerability.
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index aa7447f8837cb79d33a8ae831cac4e206a49df03..00e111ab9a0bf804e46e8f1ee1fd44532ec935eb 100644
+index 56be1fc99bdd44bd7597a775d97f8b4e95333d78..08063b29b18f673799e6aeb97f9a85ceebb72444 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
 @@ -2277,6 +2277,9 @@
@@ -315,13 +359,13 @@ index 0000000000000000000000000000000000000000..05c84eec0f31aca973839b12a918903e
 +priority boost from unblocking while background threads that do most of the
 +processing receive the priority penalty for using their entire timeslice.
 diff --git a/Makefile b/Makefile
-index 93870f58505f5195240720465e6a87b4a865bef0..b909211146103b0c4467a66c7813e9af433e0b26 100644
+index 6c3233a21380ce20f4091e38ca3a73dd4c9809f8..1f0c14d19ebd9e417f396553737ca523200adced 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -2,8 +2,8 @@
  VERSION = 6
  PATCHLEVEL = 14
- SUBLEVEL = 3
+ SUBLEVEL = 6
 -EXTRAVERSION =
 -NAME = Baby Opossum Posse
 +EXTRAVERSION = -zen1
@@ -329,7 +373,7 @@ index 93870f58505f5195240720465e6a87b4a865bef0..b909211146103b0c4467a66c7813e9af
  
  # *DOCUMENTATION*
  # To see a list of typical targets execute "make help"
-@@ -861,6 +861,9 @@ KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
+@@ -860,6 +860,9 @@ KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
  ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
  KBUILD_CFLAGS += -O2
  KBUILD_RUSTFLAGS += -Copt-level=2
@@ -339,7 +383,7 @@ index 93870f58505f5195240720465e6a87b4a865bef0..b909211146103b0c4467a66c7813e9af
  else ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
  KBUILD_CFLAGS += -Os
  KBUILD_RUSTFLAGS += -Copt-level=s
-@@ -1060,11 +1063,6 @@ KBUILD_CFLAGS	+= -fno-strict-overflow
+@@ -1059,11 +1062,6 @@ KBUILD_CFLAGS	+= -fno-strict-overflow
  # Make sure -fstack-check isn't enabled (like gentoo apparently did)
  KBUILD_CFLAGS  += -fno-stack-check
  
@@ -1149,7 +1193,7 @@ index cc8c3bd0e7c297ac7a3bc05dc72acf6149a8ca4a..1f7c3082a36dbee1e36be16934eda032
 -	pv_ops.mmu.tlb_remove_table = tlb_remove_table;
  }
 diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
-index 508c0dad116bc42fbdf1cffee2758f824838a7c3..8770dc185fe91e026b1a19ff4a809ad43e6f844a 100644
+index 508c0dad116bc42fbdf1cffee2758f824838a7c3..a5866bc0db8fd339eb5753b30bdca7c6a1ee200b 100644
 --- a/arch/x86/include/asm/cpufeatures.h
 +++ b/arch/x86/include/asm/cpufeatures.h
 @@ -338,6 +338,7 @@
@@ -1160,6 +1204,13 @@ index 508c0dad116bc42fbdf1cffee2758f824838a7c3..8770dc185fe91e026b1a19ff4a809ad4
  #define X86_FEATURE_RDPRU		(13*32+ 4) /* "rdpru" Read processor register at user level */
  #define X86_FEATURE_WBNOINVD		(13*32+ 9) /* "wbnoinvd" WBNOINVD instruction */
  #define X86_FEATURE_AMD_IBPB		(13*32+12) /* Indirect Branch Prediction Barrier */
+@@ -534,4 +535,6 @@
+ #define X86_BUG_RFDS			X86_BUG(1*32 + 2) /* "rfds" CPU is vulnerable to Register File Data Sampling */
+ #define X86_BUG_BHI			X86_BUG(1*32 + 3) /* "bhi" CPU is affected by Branch History Injection */
+ #define X86_BUG_IBPB_NO_RET	   	X86_BUG(1*32 + 4) /* "ibpb_no_ret" IBPB omits return target predictions */
++#define X86_BUG_SPECTRE_V2_USER		X86_BUG(1*32 + 5) /* "spectre_v2_user" CPU is affected by Spectre variant 2 attack between user processes */
++#define X86_BUG_OLD_MICROCODE		X86_BUG(1*32 + 6) /* "old_microcode" CPU has old microcode, it is surely vulnerable to something */
+ #endif /* _ASM_X86_CPUFEATURES_H */
 diff --git a/arch/x86/include/asm/disabled-features.h b/arch/x86/include/asm/disabled-features.h
 index c492bdc97b0595ec77f89dc9b0cefe5e3e64be41..be8c38855068f3122627babef12b02e17a102bed 100644
 --- a/arch/x86/include/asm/disabled-features.h
@@ -1749,7 +1800,7 @@ index 75884d2cdec375f1bfc8ba93e461fa810be1ba26..2fdae271f47feccfefc337bd8d8bd6f3
  #define MODULE_PROC_FAMILY "ELAN "
  #elif defined CONFIG_MCRUSOE
 diff --git a/arch/x86/kernel/cpu/amd.c b/arch/x86/kernel/cpu/amd.c
-index 4c9b20d028eb4c384a8c1a9069038e07bdefa3b7..b1146c1b35a7f5a1432858a1bb22559feb96e02d 100644
+index 70df203d814e02787a5fe16bc873ade481de4cb8..fea74def787d5bf2a8e20aba3f51f47fd680faff 100644
 --- a/arch/x86/kernel/cpu/amd.c
 +++ b/arch/x86/kernel/cpu/amd.c
 @@ -29,6 +29,8 @@
@@ -1761,7 +1812,7 @@ index 4c9b20d028eb4c384a8c1a9069038e07bdefa3b7..b1146c1b35a7f5a1432858a1bb22559f
  static inline int rdmsrl_amd_safe(unsigned msr, unsigned long long *p)
  {
  	u32 gprs[8] = { 0 };
-@@ -1074,6 +1076,10 @@ static void init_amd(struct cpuinfo_x86 *c)
+@@ -1079,6 +1081,10 @@ static void init_amd(struct cpuinfo_x86 *c)
  
  	/* AMD CPUs don't need fencing after x2APIC/TSC_DEADLINE MSR writes. */
  	clear_cpu_cap(c, X86_FEATURE_APIC_MSRS_FENCE);
@@ -1772,7 +1823,7 @@ index 4c9b20d028eb4c384a8c1a9069038e07bdefa3b7..b1146c1b35a7f5a1432858a1bb22559f
  }
  
  #ifdef CONFIG_X86_32
-@@ -1140,6 +1146,10 @@ static void cpu_detect_tlb_amd(struct cpuinfo_x86 *c)
+@@ -1145,6 +1151,10 @@ static void cpu_detect_tlb_amd(struct cpuinfo_x86 *c)
  		tlb_lli_2m[ENTRIES] = eax & mask;
  
  	tlb_lli_4m[ENTRIES] = tlb_lli_2m[ENTRIES] >> 1;
@@ -1783,6 +1834,260 @@ index 4c9b20d028eb4c384a8c1a9069038e07bdefa3b7..b1146c1b35a7f5a1432858a1bb22559f
  }
  
  static const struct cpu_dev amd_cpu_dev = {
+diff --git a/arch/x86/kernel/cpu/bugs.c b/arch/x86/kernel/cpu/bugs.c
+index 9152285aaaf961383ada5f57777f4931d8dcdc04..3aaa5eb5aff259fd698391f05b514cc31cecf8e2 100644
+--- a/arch/x86/kernel/cpu/bugs.c
++++ b/arch/x86/kernel/cpu/bugs.c
+@@ -2806,6 +2806,14 @@ static ssize_t rfds_show_state(char *buf)
+ 	return sysfs_emit(buf, "%s\n", rfds_strings[rfds_mitigation]);
+ }
+ 
++static ssize_t old_microcode_show_state(char *buf)
++{
++	if (boot_cpu_has(X86_FEATURE_HYPERVISOR))
++		return sysfs_emit(buf, "Unknown: running under hypervisor");
++
++	return sysfs_emit(buf, "Vulnerable\n");
++}
++
+ static char *stibp_state(void)
+ {
+ 	if (spectre_v2_in_eibrs_mode(spectre_v2_enabled) &&
+@@ -2988,6 +2996,9 @@ static ssize_t cpu_show_common(struct device *dev, struct device_attribute *attr
+ 	case X86_BUG_RFDS:
+ 		return rfds_show_state(buf);
+ 
++	case X86_BUG_OLD_MICROCODE:
++		return old_microcode_show_state(buf);
++
+ 	default:
+ 		break;
+ 	}
+@@ -3067,6 +3078,11 @@ ssize_t cpu_show_reg_file_data_sampling(struct device *dev, struct device_attrib
+ {
+ 	return cpu_show_common(dev, attr, buf, X86_BUG_RFDS);
+ }
++
++ssize_t cpu_show_old_microcode(struct device *dev, struct device_attribute *attr, char *buf)
++{
++	return cpu_show_common(dev, attr, buf, X86_BUG_OLD_MICROCODE);
++}
+ #endif
+ 
+ void __warn_thunk(void)
+diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
+index 7cce91b19fb2c5bf59fb09dd392e6f79c8a55a14..8d21887d66669f19b5deea9b76269f281e1ba37f 100644
+--- a/arch/x86/kernel/cpu/common.c
++++ b/arch/x86/kernel/cpu/common.c
+@@ -1317,10 +1317,52 @@ static bool __init vulnerable_to_rfds(u64 x86_arch_cap_msr)
+ 	return cpu_matches(cpu_vuln_blacklist, RFDS);
+ }
+ 
++static struct x86_cpu_id cpu_latest_microcode[] = {
++#include "microcode/intel-ucode-defs.h"
++	{}
++};
++
++static bool __init cpu_has_old_microcode(void)
++{
++	const struct x86_cpu_id *m = x86_match_cpu(cpu_latest_microcode);
++
++	/* Give unknown CPUs a pass: */
++	if (!m) {
++		/* Intel CPUs should be in the list. Warn if not: */
++		if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL)
++			pr_info("x86/CPU: Model not found in latest microcode list\n");
++		return false;
++	}
++
++	/*
++	 * Hosts usually lie to guests with a super high microcode
++	 * version. Just ignore what hosts tell guests:
++	 */
++	if (boot_cpu_has(X86_FEATURE_HYPERVISOR))
++		return false;
++
++	/* Consider all debug microcode to be old: */
++	if (boot_cpu_data.microcode & BIT(31))
++		return true;
++
++	/* Give new microocode a pass: */
++	if (boot_cpu_data.microcode >= m->driver_data)
++		return false;
++
++	/* Uh oh, too old: */
++	return true;
++}
++
+ static void __init cpu_set_bug_bits(struct cpuinfo_x86 *c)
+ {
+ 	u64 x86_arch_cap_msr = x86_read_arch_cap_msr();
+ 
++	if (cpu_has_old_microcode()) {
++		pr_warn("x86/CPU: Running old microcode\n");
++		setup_force_cpu_bug(X86_BUG_OLD_MICROCODE);
++		add_taint(TAINT_CPU_OUT_OF_SPEC, LOCKDEP_STILL_OK);
++	}
++
+ 	/* Set ITLB_MULTIHIT bug if cpu is not in the whitelist and not mitigated */
+ 	if (!cpu_matches(cpu_vuln_whitelist, NO_ITLB_MULTIHIT) &&
+ 	    !(x86_arch_cap_msr & ARCH_CAP_PSCHANGE_MC_NO))
+diff --git a/arch/x86/kernel/cpu/microcode/intel-ucode-defs.h b/arch/x86/kernel/cpu/microcode/intel-ucode-defs.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb6e601701ab6e7aa6badd20389282811e754b68
+--- /dev/null
++++ b/arch/x86/kernel/cpu/microcode/intel-ucode-defs.h
+@@ -0,0 +1,150 @@
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x03, .steppings = 0x0004, .driver_data = 0x2 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x05, .steppings = 0x0001, .driver_data = 0x45 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x05, .steppings = 0x0002, .driver_data = 0x40 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x05, .steppings = 0x0004, .driver_data = 0x2c },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x05, .steppings = 0x0008, .driver_data = 0x10 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x06, .steppings = 0x0001, .driver_data = 0xa },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x06, .steppings = 0x0020, .driver_data = 0x3 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x06, .steppings = 0x0400, .driver_data = 0xd },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x06, .steppings = 0x2000, .driver_data = 0x7 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x07, .steppings = 0x0002, .driver_data = 0x14 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x07, .steppings = 0x0004, .driver_data = 0x38 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x07, .steppings = 0x0008, .driver_data = 0x2e },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x08, .steppings = 0x0002, .driver_data = 0x11 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x08, .steppings = 0x0008, .driver_data = 0x8 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x08, .steppings = 0x0040, .driver_data = 0xc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x08, .steppings = 0x0400, .driver_data = 0x5 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x09, .steppings = 0x0020, .driver_data = 0x47 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0a, .steppings = 0x0001, .driver_data = 0x3 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0a, .steppings = 0x0002, .driver_data = 0x1 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0b, .steppings = 0x0002, .driver_data = 0x1d },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0b, .steppings = 0x0010, .driver_data = 0x2 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0d, .steppings = 0x0040, .driver_data = 0x18 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0e, .steppings = 0x0100, .driver_data = 0x39 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0e, .steppings = 0x1000, .driver_data = 0x59 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0f, .steppings = 0x0004, .driver_data = 0x5d },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0f, .steppings = 0x0040, .driver_data = 0xd2 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0f, .steppings = 0x0080, .driver_data = 0x6b },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0f, .steppings = 0x0400, .driver_data = 0x95 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0f, .steppings = 0x0800, .driver_data = 0xbc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x0f, .steppings = 0x2000, .driver_data = 0xa4 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x16, .steppings = 0x0002, .driver_data = 0x44 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x17, .steppings = 0x0040, .driver_data = 0x60f },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x17, .steppings = 0x0080, .driver_data = 0x70a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x17, .steppings = 0x0400, .driver_data = 0xa0b },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x1a, .steppings = 0x0010, .driver_data = 0x12 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x1a, .steppings = 0x0020, .driver_data = 0x1d },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x1c, .steppings = 0x0004, .driver_data = 0x219 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x1c, .steppings = 0x0400, .driver_data = 0x107 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x1d, .steppings = 0x0002, .driver_data = 0x29 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x1e, .steppings = 0x0020, .driver_data = 0xa },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x25, .steppings = 0x0004, .driver_data = 0x11 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x25, .steppings = 0x0020, .driver_data = 0x7 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x26, .steppings = 0x0002, .driver_data = 0x105 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x2a, .steppings = 0x0080, .driver_data = 0x2f },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x2c, .steppings = 0x0004, .driver_data = 0x1f },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x2d, .steppings = 0x0040, .driver_data = 0x621 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x2d, .steppings = 0x0080, .driver_data = 0x71a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x2e, .steppings = 0x0040, .driver_data = 0xd },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x2f, .steppings = 0x0004, .driver_data = 0x3b },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x37, .steppings = 0x0100, .driver_data = 0x838 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x37, .steppings = 0x0200, .driver_data = 0x90d },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3a, .steppings = 0x0200, .driver_data = 0x21 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3c, .steppings = 0x0008, .driver_data = 0x28 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3d, .steppings = 0x0010, .driver_data = 0x2f },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3e, .steppings = 0x0010, .driver_data = 0x42e },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3e, .steppings = 0x0040, .driver_data = 0x600 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3e, .steppings = 0x0080, .driver_data = 0x715 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3f, .steppings = 0x0004, .driver_data = 0x49 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x3f, .steppings = 0x0010, .driver_data = 0x1a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x45, .steppings = 0x0002, .driver_data = 0x26 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x46, .steppings = 0x0002, .driver_data = 0x1c },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x47, .steppings = 0x0002, .driver_data = 0x22 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x4c, .steppings = 0x0008, .driver_data = 0x368 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x4c, .steppings = 0x0010, .driver_data = 0x411 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x4d, .steppings = 0x0100, .driver_data = 0x12d },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x4e, .steppings = 0x0008, .driver_data = 0xf0 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x55, .steppings = 0x0008, .driver_data = 0x1000191 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x55, .steppings = 0x0010, .driver_data = 0x2007006 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x55, .steppings = 0x0020, .driver_data = 0x3000010 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x55, .steppings = 0x0040, .driver_data = 0x4003605 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x55, .steppings = 0x0080, .driver_data = 0x5003707 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x55, .steppings = 0x0800, .driver_data = 0x7002904 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x56, .steppings = 0x0004, .driver_data = 0x1c },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x56, .steppings = 0x0008, .driver_data = 0x700001c },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x56, .steppings = 0x0010, .driver_data = 0xf00001a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x56, .steppings = 0x0020, .driver_data = 0xe000015 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x5c, .steppings = 0x0004, .driver_data = 0x14 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x5c, .steppings = 0x0200, .driver_data = 0x48 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x5c, .steppings = 0x0400, .driver_data = 0x28 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x5e, .steppings = 0x0008, .driver_data = 0xf0 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x5f, .steppings = 0x0002, .driver_data = 0x3e },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x66, .steppings = 0x0008, .driver_data = 0x2a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x6a, .steppings = 0x0020, .driver_data = 0xc0002f0 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x6a, .steppings = 0x0040, .driver_data = 0xd0003e7 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x6c, .steppings = 0x0002, .driver_data = 0x10002b0 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x7a, .steppings = 0x0002, .driver_data = 0x42 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x7a, .steppings = 0x0100, .driver_data = 0x24 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x7e, .steppings = 0x0020, .driver_data = 0xc6 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8a, .steppings = 0x0002, .driver_data = 0x33 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8c, .steppings = 0x0002, .driver_data = 0xb8 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8c, .steppings = 0x0004, .driver_data = 0x38 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8d, .steppings = 0x0002, .driver_data = 0x52 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8e, .steppings = 0x0200, .driver_data = 0xf6 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8e, .steppings = 0x0400, .driver_data = 0xf6 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8e, .steppings = 0x0800, .driver_data = 0xf6 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8e, .steppings = 0x1000, .driver_data = 0xfc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8f, .steppings = 0x0100, .driver_data = 0x2c000390 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8f, .steppings = 0x0080, .driver_data = 0x2b000603 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8f, .steppings = 0x0040, .driver_data = 0x2c000390 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8f, .steppings = 0x0020, .driver_data = 0x2c000390 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x8f, .steppings = 0x0010, .driver_data = 0x2c000390 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x96, .steppings = 0x0002, .driver_data = 0x1a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x97, .steppings = 0x0004, .driver_data = 0x37 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x97, .steppings = 0x0020, .driver_data = 0x37 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xbf, .steppings = 0x0004, .driver_data = 0x37 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xbf, .steppings = 0x0020, .driver_data = 0x37 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9a, .steppings = 0x0008, .driver_data = 0x435 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9a, .steppings = 0x0010, .driver_data = 0x435 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9c, .steppings = 0x0001, .driver_data = 0x24000026 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9e, .steppings = 0x0200, .driver_data = 0xf8 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9e, .steppings = 0x0400, .driver_data = 0xf8 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9e, .steppings = 0x0800, .driver_data = 0xf6 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9e, .steppings = 0x1000, .driver_data = 0xf8 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0x9e, .steppings = 0x2000, .driver_data = 0x100 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xa5, .steppings = 0x0004, .driver_data = 0xfc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xa5, .steppings = 0x0008, .driver_data = 0xfc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xa5, .steppings = 0x0020, .driver_data = 0xfc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xa6, .steppings = 0x0001, .driver_data = 0xfe },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xa6, .steppings = 0x0002, .driver_data = 0xfc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xa7, .steppings = 0x0002, .driver_data = 0x62 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xaa, .steppings = 0x0010, .driver_data = 0x20 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xb7, .steppings = 0x0002, .driver_data = 0x12b },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xba, .steppings = 0x0004, .driver_data = 0x4123 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xba, .steppings = 0x0008, .driver_data = 0x4123 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xba, .steppings = 0x0100, .driver_data = 0x4123 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xbe, .steppings = 0x0001, .driver_data = 0x1a },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xcf, .steppings = 0x0004, .driver_data = 0x21000283 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0x6,  .model = 0xcf, .steppings = 0x0002, .driver_data = 0x21000283 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x00, .steppings = 0x0080, .driver_data = 0x12 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x00, .steppings = 0x0400, .driver_data = 0x15 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x01, .steppings = 0x0004, .driver_data = 0x2e },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x02, .steppings = 0x0010, .driver_data = 0x21 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x02, .steppings = 0x0020, .driver_data = 0x2c },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x02, .steppings = 0x0040, .driver_data = 0x10 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x02, .steppings = 0x0080, .driver_data = 0x39 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x02, .steppings = 0x0200, .driver_data = 0x2f },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x03, .steppings = 0x0004, .driver_data = 0xa },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x03, .steppings = 0x0008, .driver_data = 0xc },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x03, .steppings = 0x0010, .driver_data = 0x17 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0002, .driver_data = 0x17 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0008, .driver_data = 0x5 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0010, .driver_data = 0x6 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0080, .driver_data = 0x3 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0100, .driver_data = 0xe },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0200, .driver_data = 0x3 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x04, .steppings = 0x0400, .driver_data = 0x4 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x06, .steppings = 0x0004, .driver_data = 0xf },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x06, .steppings = 0x0010, .driver_data = 0x4 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x06, .steppings = 0x0020, .driver_data = 0x8 },
++{ .flags = X86_CPU_ID_FLAG_ENTRY_VALID, .vendor = X86_VENDOR_INTEL, .family = 0xf,  .model = 0x06, .steppings = 0x0100, .driver_data = 0x9 },
 diff --git a/arch/x86/kernel/kvm.c b/arch/x86/kernel/kvm.c
 index 7a422a6c5983c81aa473a00b04952e046e3bf6c8..3be9b3342c672fd8efbf3a20bc9901756a902bba 100644
 --- a/arch/x86/kernel/kvm.c
@@ -1830,7 +2135,7 @@ index c5bb980b8a6732043dcd6ab22ff7f7037643431d..3f4864501d9e77faaa59a05bfba81302
  	.mmu.exit_mmap		= paravirt_nop,
  	.mmu.notify_page_enc_status_changed	= paravirt_nop,
 diff --git a/arch/x86/mm/pgtable.c b/arch/x86/mm/pgtable.c
-index 1fef5ad32d5a8be139b1d93aa84291a93bf13245..b1c1f72c1fd1bae4c4940f9867977cda33e36b6d 100644
+index 9b0ee41b545c7ec766274f00c8ccb5c3dcc3e108..1ddbd799acdf5e8fe985ec15782817d475ecdd79 100644
 --- a/arch/x86/mm/pgtable.c
 +++ b/arch/x86/mm/pgtable.c
 @@ -18,25 +18,6 @@ EXPORT_SYMBOL(physical_mask);
@@ -1900,7 +2205,7 @@ index 1fef5ad32d5a8be139b1d93aa84291a93bf13245..b1c1f72c1fd1bae4c4940f9867977cda
  #endif	/* CONFIG_PGTABLE_LEVELS > 4 */
  #endif	/* CONFIG_PGTABLE_LEVELS > 3 */
 diff --git a/arch/x86/mm/tlb.c b/arch/x86/mm/tlb.c
-index 6cf881a942bbedc672889f2c96344980f1fd4e46..296346b638bce28840c33ddb0e2f6e36e7fa6776 100644
+index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb9413eb19eb 100644
 --- a/arch/x86/mm/tlb.c
 +++ b/arch/x86/mm/tlb.c
 @@ -74,13 +74,15 @@
@@ -2776,6 +3081,53 @@ index 22afa4ff860d18561e1f0100857e001aa51a27f1..fd2718aa48bef657fde3a43db4a9e5d1
  EXPORT_SYMBOL_GPL(ahci_ignore_sss);
  
  module_param_named(skip_host_reset, ahci_skip_host_reset, int, 0444);
+diff --git a/drivers/base/cpu.c b/drivers/base/cpu.c
+index a7e5118498758ef05cc98cd87655dc0b64110193..1c4359366cd7602974c1b74519e3cca579af246a 100644
+--- a/drivers/base/cpu.c
++++ b/drivers/base/cpu.c
+@@ -600,39 +600,42 @@ CPU_SHOW_VULN_FALLBACK(spec_rstack_overflow);
+ CPU_SHOW_VULN_FALLBACK(gds);
+ CPU_SHOW_VULN_FALLBACK(reg_file_data_sampling);
+ CPU_SHOW_VULN_FALLBACK(ghostwrite);
++CPU_SHOW_VULN_FALLBACK(old_microcode);
+ 
+ static DEVICE_ATTR(meltdown, 0444, cpu_show_meltdown, NULL);
+ static DEVICE_ATTR(spectre_v1, 0444, cpu_show_spectre_v1, NULL);
+ static DEVICE_ATTR(spectre_v2, 0444, cpu_show_spectre_v2, NULL);
+ static DEVICE_ATTR(spec_store_bypass, 0444, cpu_show_spec_store_bypass, NULL);
+ static DEVICE_ATTR(l1tf, 0444, cpu_show_l1tf, NULL);
+ static DEVICE_ATTR(mds, 0444, cpu_show_mds, NULL);
+ static DEVICE_ATTR(tsx_async_abort, 0444, cpu_show_tsx_async_abort, NULL);
+ static DEVICE_ATTR(itlb_multihit, 0444, cpu_show_itlb_multihit, NULL);
+ static DEVICE_ATTR(srbds, 0444, cpu_show_srbds, NULL);
+ static DEVICE_ATTR(mmio_stale_data, 0444, cpu_show_mmio_stale_data, NULL);
+ static DEVICE_ATTR(retbleed, 0444, cpu_show_retbleed, NULL);
+ static DEVICE_ATTR(spec_rstack_overflow, 0444, cpu_show_spec_rstack_overflow, NULL);
+ static DEVICE_ATTR(gather_data_sampling, 0444, cpu_show_gds, NULL);
+ static DEVICE_ATTR(reg_file_data_sampling, 0444, cpu_show_reg_file_data_sampling, NULL);
+ static DEVICE_ATTR(ghostwrite, 0444, cpu_show_ghostwrite, NULL);
++static DEVICE_ATTR(old_microcode, 0444, cpu_show_old_microcode, NULL);
+ 
+ static struct attribute *cpu_root_vulnerabilities_attrs[] = {
+ 	&dev_attr_meltdown.attr,
+ 	&dev_attr_spectre_v1.attr,
+ 	&dev_attr_spectre_v2.attr,
+ 	&dev_attr_spec_store_bypass.attr,
+ 	&dev_attr_l1tf.attr,
+ 	&dev_attr_mds.attr,
+ 	&dev_attr_tsx_async_abort.attr,
+ 	&dev_attr_itlb_multihit.attr,
+ 	&dev_attr_srbds.attr,
+ 	&dev_attr_mmio_stale_data.attr,
+ 	&dev_attr_retbleed.attr,
+ 	&dev_attr_spec_rstack_overflow.attr,
+ 	&dev_attr_gather_data_sampling.attr,
+ 	&dev_attr_reg_file_data_sampling.attr,
+ 	&dev_attr_ghostwrite.attr,
++	&dev_attr_old_microcode.attr,
+ 	NULL
+ };
+ 
 diff --git a/drivers/cpufreq/Kconfig.x86 b/drivers/cpufreq/Kconfig.x86
 index 97c2d4f15d76e382123fbe0c3829e066dc63dced..5a3af44d785a10800a6dd6f03fedd48903d8ca8e 100644
 --- a/drivers/cpufreq/Kconfig.x86
@@ -2797,7 +3149,7 @@ index 97c2d4f15d76e382123fbe0c3829e066dc63dced..5a3af44d785a10800a6dd6f03fedd489
  	  This driver adds a CPUFreq driver which utilizes a fine grain
  	  processor performance frequency control range instead of legacy
 diff --git a/drivers/cpufreq/cpufreq_ondemand.c b/drivers/cpufreq/cpufreq_ondemand.c
-index a7c38b8b3e789094106d7d09635b89b39fe12e9b..3154e12dd4fb86d8baaf5399f47e7f8b3fabfae4 100644
+index 0e65d37c923113afcc772b5d29372fb65d1fc75b..be91dfe6b3f044571d2ed109bfa3e0ee81a7af59 100644
 --- a/drivers/cpufreq/cpufreq_ondemand.c
 +++ b/drivers/cpufreq/cpufreq_ondemand.c
 @@ -18,10 +18,16 @@
@@ -2820,10 +3172,10 @@ index a7c38b8b3e789094106d7d09635b89b39fe12e9b..3154e12dd4fb86d8baaf5399f47e7f8b
  #define MAX_FREQUENCY_UP_THRESHOLD		(100)
  
 diff --git a/drivers/cpufreq/intel_pstate.c b/drivers/cpufreq/intel_pstate.c
-index 9c4cc01fd51aadc3c7d4a5870033e0f851c7a42a..06a3c53e116e1f1a52899160a97a441707b69a5d 100644
+index 43e847e9f741e38fd03a84415f71b8b377e53ec5..8bc16e45a28e32fc662fc39f4e05528a3a3fb4af 100644
 --- a/drivers/cpufreq/intel_pstate.c
 +++ b/drivers/cpufreq/intel_pstate.c
-@@ -3827,6 +3827,8 @@ static int __init intel_pstate_setup(char *str)
+@@ -3830,6 +3830,8 @@ static int __init intel_pstate_setup(char *str)
  
  	if (!strcmp(str, "disable"))
  		no_load = 1;
@@ -2869,7 +3221,7 @@ index 7c5c03f274b951af84a8f69689d55aa7a5448c77..a60b0a4faf29e5e93b23e04f52994657
  		if (!IS_ERR(pd))
  			goto put_device;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index 69895fccb474aefae082fee2f6db916f4afd41ab..5884de0f23bb1452ec66d3ce73511155619c9d52 100644
+index 98f0c12df12bc1af0eced62cfdc8cb27444ba2c4..33a9e7c0ced23fbac81ba3acf2aac79605951b92 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 @@ -160,6 +160,7 @@ struct amdgpu_watchdog_timer {
@@ -2881,7 +3233,7 @@ index 69895fccb474aefae082fee2f6db916f4afd41ab..5884de0f23bb1452ec66d3ce73511155
  extern int amdgpu_gart_size;
  extern int amdgpu_gtt_size;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index c0ddbe7d6f0bc5a4ab59f5ede37a0d19eb0b32ec..73b1a742c5e439a46c8bdd72d98e8d49ebbb44b3 100644
+index f2d77bc04e4a986b0147bc752353683002b35061..a3e33d97f89df3e51c3fa467977210b36f7ec7a8 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 @@ -139,6 +139,7 @@ enum AMDGPU_DEBUG_MASK {
@@ -2908,21 +3260,6 @@ index c0ddbe7d6f0bc5a4ab59f5ede37a0d19eb0b32ec..73b1a742c5e439a46c8bdd72d98e8d49
  /**
   * DOC: vramlimit (int)
   * Restrict the total amount of VRAM in MiB for testing.  The default is 0 (Use full VRAM).
-diff --git a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-index f9a4d08eef92591bd36ec10e2a12ab6e458bd1a8..0f808ffcab9433b162572f35117e279efe4f1b27 100644
---- a/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-+++ b/drivers/gpu/drm/amd/amdgpu/mes_v11_0.c
-@@ -899,6 +899,10 @@ static void mes_v11_0_get_fw_version(struct amdgpu_device *adev)
- {
- 	int pipe;
- 
-+	/* return early if we have already fetched these */
-+	if (adev->mes.sched_version && adev->mes.kiq_version)
-+		return;
-+
- 	/* get MES scheduler/KIQ versions */
- 	mutex_lock(&adev->srbm_mutex);
- 
 diff --git a/drivers/gpu/drm/amd/pm/amdgpu_pm.c b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
 index 77b1f061bbf0b434b7efd596dc9ed1e4d1a8eee7..89ffc9fd94637379c940e603440a1f21086a2c72 100644
 --- a/drivers/gpu/drm/amd/pm/amdgpu_pm.c
@@ -3069,26 +3406,6 @@ index 02a2919f4e5aad9f5e9abdb7210657e43068ffba..39592d085f802107b54846ddc71a5002
  	ret = crypt_ctr_cipher(ti, argv[0], argv[1]);
  	if (ret < 0)
  		goto bad;
-diff --git a/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c b/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c
-index 793514a1852a3dc29d89fcb86461800d8e33c382..e37fa5ae97f649d2633d293b3784503fb737bd94 100644
---- a/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c
-+++ b/drivers/net/wireless/intel/iwlwifi/pcie/trans-gen2.c
-@@ -147,8 +147,14 @@ static void _iwl_trans_pcie_gen2_stop_device(struct iwl_trans *trans)
- 		return;
- 
- 	if (trans->state >= IWL_TRANS_FW_STARTED &&
--	    trans_pcie->fw_reset_handshake)
-+	    trans_pcie->fw_reset_handshake) {
-+		/*
-+		 * Reset handshake can dump firmware on timeout, but that
-+		 * should assume that the firmware is already dead.
-+		 */
-+		trans->state = IWL_TRANS_NO_FW;
- 		iwl_trans_pcie_fw_reset_handshake(trans);
-+	}
- 
- 	trans_pcie->is_down = true;
- 
 diff --git a/drivers/pci/controller/Makefile b/drivers/pci/controller/Makefile
 index 038ccbd9e3ba238c98c380a31aa5e1d34ec5fceb..de5e4f5145af8d7d31aac64035981923da450f2e 100644
 --- a/drivers/pci/controller/Makefile
@@ -4903,6 +5220,19 @@ index 8874f681b056751fa9be3bee4d1a12b86f8fd1b5..59eb72bf7d5fde0ce06f4f3ab740056b
  	[RLIMIT_RTPRIO]		= { 0, 0 },				\
  	[RLIMIT_RTTIME]		= {  RLIM_INFINITY,  RLIM_INFINITY },	\
  }
+diff --git a/include/linux/cpu.h b/include/linux/cpu.h
+index 6a0a8f1c7c90358f9e50ada3a1efd82a1506eacf..9532f7039780b1ca72f98137fe34978f1bc60c6a 100644
+--- a/include/linux/cpu.h
++++ b/include/linux/cpu.h
+@@ -78,6 +78,8 @@ extern ssize_t cpu_show_gds(struct device *dev,
+ extern ssize_t cpu_show_reg_file_data_sampling(struct device *dev,
+ 					       struct device_attribute *attr, char *buf);
+ extern ssize_t cpu_show_ghostwrite(struct device *dev, struct device_attribute *attr, char *buf);
++extern ssize_t cpu_show_old_microcode(struct device *dev,
++				      struct device_attribute *attr, char *buf);
+ 
+ extern __printf(4, 5)
+ struct device *cpu_device_create(struct device *parent, void *drvdata,
 diff --git a/include/linux/mm.h b/include/linux/mm.h
 index 1f80baddacc59b8783f8bd22d5dc6747303c4716..a721f19c322f1c3a38ce8238f00e48932d0945e0 100644
 --- a/include/linux/mm.h
@@ -5568,7 +5898,7 @@ index dbf896f3146c5fb2a35d68f8633fda4e0b74a6fb..92b6d6472951a569ceaf93f5e1caa832
  /*
   * Sender's congestion state indicating normal or abnormal situations
 diff --git a/init/Kconfig b/init/Kconfig
-index 5ab47c346ef93a257b1c02eeebc7c058e7b65384..cf0728d4ebb2203549f5a3b2474beef2f9517ca5 100644
+index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7e56c15c9 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
 @@ -162,6 +162,44 @@ config THREAD_INFO_IN_TASK
@@ -5824,10 +6154,10 @@ index 54ea59ff8fbeb653b7084a78bd0d933076deaad5..92522f614635eb4c091233900288b415
  	help
  	  This option enables a new scheduler class sched_ext (SCX), which
 diff --git a/kernel/cgroup/cpuset.c b/kernel/cgroup/cpuset.c
-index d72f843d9feebd63d82e127f38f113e99584b48d..57f5474e3111e57bb7480dda2490a9bcd10738e4 100644
+index 1287274ae1ce9a764e6eafd0483c2607a49b21c4..7d2fdf66e92e044f0e089c4b604d179dd8ef3a28 100644
 --- a/kernel/cgroup/cpuset.c
 +++ b/kernel/cgroup/cpuset.c
-@@ -643,7 +643,7 @@ static int validate_change(struct cpuset *cur, struct cpuset *trial)
+@@ -644,7 +644,7 @@ static int validate_change(struct cpuset *cur, struct cpuset *trial)
  	return ret;
  }
  
@@ -5836,7 +6166,7 @@ index d72f843d9feebd63d82e127f38f113e99584b48d..57f5474e3111e57bb7480dda2490a9bc
  /*
   * Helper routine for generate_sched_domains().
   * Do cpusets a, b have overlapping effective cpus_allowed masks?
-@@ -1065,7 +1065,7 @@ void rebuild_sched_domains_locked(void)
+@@ -1066,7 +1066,7 @@ void rebuild_sched_domains_locked(void)
  	/* Have scheduler rebuild the domains */
  	partition_and_rebuild_sched_domains(ndoms, doms, attr);
  }
@@ -5845,7 +6175,7 @@ index d72f843d9feebd63d82e127f38f113e99584b48d..57f5474e3111e57bb7480dda2490a9bc
  void rebuild_sched_domains_locked(void)
  {
  }
-@@ -2968,59 +2968,65 @@ static int cpuset_can_attach(struct cgroup_taskset *tset)
+@@ -2982,59 +2982,65 @@ static int cpuset_can_attach(struct cgroup_taskset *tset)
  				goto out_unlock;
  		}
  
@@ -15710,10 +16040,10 @@ index 80a3df49ab478420a8827f62a0bdf3374479082e..58d04aa736347b3c5a4b38879f98f584
  #endif
  
 diff --git a/kernel/sched/cpufreq_schedutil.c b/kernel/sched/cpufreq_schedutil.c
-index 1a19d69b91ed3cc9dde91eba91793d95f74ba4fc..1f3116b727cb70fbbbad5cf97f73aa76d6fc4f63 100644
+index bcab867575bb5b5ff01645f44ae0fbe7991ee39a..fed0748db0410424f30ac91f367203e9b12f078f 100644
 --- a/kernel/sched/cpufreq_schedutil.c
 +++ b/kernel/sched/cpufreq_schedutil.c
-@@ -197,14 +197,19 @@ unsigned long sugov_effective_cpu_perf(int cpu, unsigned long actual,
+@@ -220,14 +220,19 @@ unsigned long sugov_effective_cpu_perf(int cpu, unsigned long actual,
  
  static void sugov_get_util(struct sugov_cpu *sg_cpu, unsigned long boost)
  {
@@ -15733,18 +16063,18 @@ index 1a19d69b91ed3cc9dde91eba91793d95f74ba4fc..1f3116b727cb70fbbbad5cf97f73aa76
  }
  
  /**
-@@ -364,8 +369,10 @@ static inline bool sugov_hold_freq(struct sugov_cpu *sg_cpu) { return false; }
+@@ -387,8 +392,10 @@ static inline bool sugov_hold_freq(struct sugov_cpu *sg_cpu) { return false; }
   */
  static inline void ignore_dl_rate_limit(struct sugov_cpu *sg_cpu)
  {
 +#ifndef CONFIG_SCHED_ALT
  	if (cpu_bw_dl(cpu_rq(sg_cpu->cpu)) > sg_cpu->bw_min)
- 		sg_cpu->sg_policy->limits_changed = true;
+ 		WRITE_ONCE(sg_cpu->sg_policy->limits_changed, true);
 +#endif
  }
  
  static inline bool sugov_update_single_common(struct sugov_cpu *sg_cpu,
-@@ -659,6 +666,7 @@ static int sugov_kthread_create(struct sugov_policy *sg_policy)
+@@ -682,6 +689,7 @@ static int sugov_kthread_create(struct sugov_policy *sg_policy)
  	}
  
  	ret = sched_setattr_nocheck(thread, &attr);
@@ -15942,7 +16272,7 @@ index a0893a483d35d5116cb51789e2a601e361279bc3..76ebaeae56e9747219e14dd1189639ee
  void resched_latency_warn(int cpu, u64 latency)
  {
 diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
-index 89c7260103e18b002e583848db0ab314f0a5819b..4d7ea67627be18e58350937bb3ad3fb8b87d4448 100644
+index 3d9b68a347b7647b5f76549ba17f22d9e6391296..67095304b7a951c9cccc2ff48cb977888c772a48 100644
 --- a/kernel/sched/fair.c
 +++ b/kernel/sched/fair.c
 @@ -76,10 +76,19 @@ unsigned int sysctl_sched_tunable_scaling = SCHED_TUNABLESCALING_LOG;
@@ -17762,10 +18092,10 @@ index fc8281ef42415da576e4513649a17595d7593159..5ce5b6f09f9bc9717fdd83a740e6e3d3
 +#endif
  }
 diff --git a/mm/vmscan.c b/mm/vmscan.c
-index fada3b35aff834d1f50ceb9046b5e17df5867f1f..fb6b6974ab57bf71d5ac7d524aa4bb8d4dc2f1b2 100644
+index e9f3ae8158a660649ca85b3a17c8b8260cb11685..a18714a602734ea16b65e9ddb98704583e6ca3d5 100644
 --- a/mm/vmscan.c
 +++ b/mm/vmscan.c
-@@ -6382,7 +6382,7 @@ static unsigned long do_try_to_free_pages(struct zonelist *zonelist,
+@@ -6389,7 +6389,7 @@ static unsigned long do_try_to_free_pages(struct zonelist *zonelist,
  	return 0;
  }
  
@@ -17774,7 +18104,7 @@ index fada3b35aff834d1f50ceb9046b5e17df5867f1f..fb6b6974ab57bf71d5ac7d524aa4bb8d
  {
  	struct zone *zone;
  	unsigned long pfmemalloc_reserve = 0;
-@@ -6411,6 +6411,10 @@ static bool allow_direct_reclaim(pg_data_t *pgdat)
+@@ -6418,6 +6418,10 @@ static bool allow_direct_reclaim(pg_data_t *pgdat)
  
  	wmark_ok = free_pages > pfmemalloc_reserve / 2;
  
@@ -17785,7 +18115,7 @@ index fada3b35aff834d1f50ceb9046b5e17df5867f1f..fb6b6974ab57bf71d5ac7d524aa4bb8d
  	/* kswapd must be awake if processes are being throttled */
  	if (!wmark_ok && waitqueue_active(&pgdat->kswapd_wait)) {
  		if (READ_ONCE(pgdat->kswapd_highest_zoneidx) > ZONE_NORMAL)
-@@ -6476,33 +6480,36 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
+@@ -6483,33 +6487,36 @@ static bool throttle_direct_reclaim(gfp_t gfp_mask, struct zonelist *zonelist,
  
  		/* Throttle based on the first usable node */
  		pgdat = zone->zone_pgdat;
@@ -17825,7 +18155,7 @@ index fada3b35aff834d1f50ceb9046b5e17df5867f1f..fb6b6974ab57bf71d5ac7d524aa4bb8d
  
  	if (fatal_signal_pending(current))
  		return true;
-@@ -7005,14 +7012,14 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int highest_zoneidx)
+@@ -7012,14 +7019,14 @@ static int balance_pgdat(pg_data_t *pgdat, int order, int highest_zoneidx)
  		 * able to safely make forward progress. Wake them
  		 */
  		if (waitqueue_active(&pgdat->pfmemalloc_wait) &&

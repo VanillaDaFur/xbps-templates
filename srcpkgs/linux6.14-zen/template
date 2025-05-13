@@ -1,6 +1,6 @@
 # Template file for 'linux6.14-zen'
 pkgname=linux6.14-zen
-version=6.14.3
+version=6.14.6
 revision=1
 short_desc="Linux zen kernel and modules (${version%.*} series)"
 maintainer="Vanilla <snowydafur@protonmail.com>"
