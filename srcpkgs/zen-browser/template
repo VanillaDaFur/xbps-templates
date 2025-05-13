@@ -1,6 +1,6 @@
 # Template file for 'zen-browser'
 pkgname=zen-browser
-version=1.12b
+version=1.12.3b
 revision=1
 archs="x86_64"
 hostmakedepends="tar xz"
@@ -19,7 +19,7 @@ do_install() {
 
   # Linking binary to a /usr/bin directory
 	vmkdir usr/bin/
-	ln -sf ../lib/zen-browser/zen "${DESTDIR}"/usr/bin/zen
+	ln -sf ../lib/zen-browser/zen "${DESTDIR}"/usr/bin/zen-browser
 
   # Installing default icons
 	for i in 16x16 32x32 48x48 64x64 128x128; do
@@ -32,7 +32,7 @@ do_install() {
 [Desktop Entry]
 Name=Zen Browser
 Terminal=false
-Exec=zen %u
+Exec=zen-browser %u
 Icon=zen-browser
 Type=Application
 Categories=Network;WebBrowser;
