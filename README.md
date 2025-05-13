@@ -7,6 +7,6 @@ Currently added templates
 | darkly                  | 0.5.18              |
 | rofi-wayland            | 1.7.8+wayland1      |
 | vesktop                 | 1.5.6               |
-| linux-zen               | 6.14.3              |
+| linux-zen               | 6.14.6              |
 | ttf-jetbrains-mono-nerd | 3.4.0               |
-| zen-browser             | 1.12b               |
+| zen-browser             | 1.12.3b             |
