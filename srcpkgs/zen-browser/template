@@ -1,6 +1,6 @@
 # Template file for 'zen-browser'
 pkgname=zen-browser
-version=1.12.3b
+version=1.12.6b
 revision=1
 archs="x86_64"
 hostmakedepends="tar xz"
@@ -9,7 +9,7 @@ maintainer="VanillaDaFur <SnowyDaFur@protonmail.com>"
 license="MPL-2.0"
 homepage="https://github.com/zen-browser/desktop"
 distfiles="https://github.com/zen-browser/desktop/releases/download/${version}/zen.linux-x86_64.tar.xz"
-checksum=76aa9feee9fae5a0de916ec99170d944bfb254303907f499eb3dee38bcc45eef
+checksum="0bf8d6a6ae95962860508f0c32ec29de0d2d67820ae5f8de4fdd7329eed60698"
 depends="nss>=3.72 nspr>=4.32 desktop-file-utils hicolor-icon-theme pciutils"
 
 do_install() {
