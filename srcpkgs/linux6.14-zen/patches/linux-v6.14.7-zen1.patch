@@ -23,7 +23,7 @@
  arch/x86/entry/syscalls/syscall_32.tbl             |    3 +
  arch/x86/entry/syscalls/syscall_64.tbl             |    3 +
  arch/x86/hyperv/mmu.c                              |    1 -
- arch/x86/include/asm/cpufeatures.h                 |    3 +
+ arch/x86/include/asm/cpufeatures.h                 |    2 +
  arch/x86/include/asm/disabled-features.h           |    8 +-
  arch/x86/include/asm/mmu.h                         |   12 +
  arch/x86/include/asm/mmu_context.h                 |   10 +-
@@ -42,7 +42,7 @@
  arch/x86/kernel/kvm.c                              |    1 -
  arch/x86/kernel/paravirt.c                         |   16 -
  arch/x86/mm/pgtable.c                              |   27 +-
- arch/x86/mm/tlb.c                                  |  427 +-
+ arch/x86/mm/tlb.c                                  |  432 +-
  arch/x86/pci/common.c                              |    7 +-
  arch/x86/tools/insn_decoder_test.c                 |    3 +-
  arch/x86/xen/mmu_pv.c                              |    1 -
@@ -83,6 +83,7 @@
  include/linux/syscalls.h                           |    3 +
  include/linux/tcp.h                                |    6 +-
  include/linux/user_namespace.h                     |    4 +
+ include/net/bluetooth/hci_core.h                   |    1 +
  include/net/inet_connection_sock.h                 |    4 +-
  include/net/tcp.h                                  |   72 +-
  include/uapi/asm-generic/unistd.h                  |    9 +-
@@ -140,6 +141,8 @@
  mm/page_alloc.c                                    |   21 +-
  mm/swap.c                                          |    5 +
  mm/vmscan.c                                        |   19 +-
+ net/bluetooth/hci_conn.c                           |   24 +
+ net/bluetooth/hci_event.c                          |   73 +-
  net/ipv4/Kconfig                                   |   21 +-
  net/ipv4/bpf_tcp_ca.c                              |    4 +-
  net/ipv4/tcp.c                                     |    3 +
@@ -154,13 +157,13 @@
  tools/arch/x86/include/asm/msr-index.h             |    2 +
  tools/perf/arch/powerpc/entry/syscalls/syscall.tbl |    3 +
  tools/perf/arch/s390/entry/syscalls/syscall.tbl    |    3 +
- 156 files changed, 15971 insertions(+), 722 deletions(-)
+ 159 files changed, 16038 insertions(+), 757 deletions(-)
 
 diff --git a/Documentation/ABI/testing/sysfs-devices-system-cpu b/Documentation/ABI/testing/sysfs-devices-system-cpu
-index 206079d3bd5b127b0ccddfd4be50c978563a0b46..766a9747b154ff5480c54adfe90e5c4af27cb895 100644
+index 6a1acabb29d85f4954d424eff416e98474a0412d..7772d4f034d26aa67f3823bba134067ecd32fb51 100644
 --- a/Documentation/ABI/testing/sysfs-devices-system-cpu
 +++ b/Documentation/ABI/testing/sysfs-devices-system-cpu
-@@ -516,6 +516,7 @@ What:		/sys/devices/system/cpu/vulnerabilities
+@@ -517,6 +517,7 @@ What:		/sys/devices/system/cpu/vulnerabilities
  		/sys/devices/system/cpu/vulnerabilities/mds
  		/sys/devices/system/cpu/vulnerabilities/meltdown
  		/sys/devices/system/cpu/vulnerabilities/mmio_stale_data
@@ -196,10 +199,10 @@ index 0000000000000000000000000000000000000000..6ded8f86b8d06a6641cba7d9cad67925
 +determined at boot. Runtime microcode updates do not change the status
 +of this vulnerability.
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index 56be1fc99bdd44bd7597a775d97f8b4e95333d78..08063b29b18f673799e6aeb97f9a85ceebb72444 100644
+index f9e11cebc598cbdceab86d7c8e98d371b92e87ab..1f8c2b2e466a835335c4e7d060e510e1ba4f5477 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
-@@ -2277,6 +2277,9 @@
+@@ -2294,6 +2294,9 @@
  			disable
  			  Do not enable intel_pstate as the default
  			  scaling driver for the supported processors
@@ -209,7 +212,7 @@ index 56be1fc99bdd44bd7597a775d97f8b4e95333d78..08063b29b18f673799e6aeb97f9a85ce
                          active
                            Use intel_pstate driver to bypass the scaling
                            governors layer of cpufreq and provides it own
-@@ -4644,6 +4647,15 @@
+@@ -4662,6 +4665,15 @@
  		nomsi		[MSI] If the PCI_MSI kernel config parameter is
  				enabled, this kernel boot option can be used to
  				disable the use of MSI interrupts system-wide.
@@ -359,13 +362,13 @@ index 0000000000000000000000000000000000000000..05c84eec0f31aca973839b12a918903e
 +priority boost from unblocking while background threads that do most of the
 +processing receive the priority penalty for using their entire timeslice.
 diff --git a/Makefile b/Makefile
-index 6c3233a21380ce20f4091e38ca3a73dd4c9809f8..1f0c14d19ebd9e417f396553737ca523200adced 100644
+index 70bd8847c8677aef46d10fb5bbd8c259220c549a..37e3726d9ba6834a4c104d06bd258dc586d695f1 100644
 --- a/Makefile
 +++ b/Makefile
 @@ -2,8 +2,8 @@
  VERSION = 6
  PATCHLEVEL = 14
- SUBLEVEL = 6
+ SUBLEVEL = 7
 -EXTRAVERSION =
 -NAME = Baby Opossum Posse
 +EXTRAVERSION = -zen1
@@ -550,7 +553,7 @@ index 727f99d333b304b3db0711953a3d91ece18a28eb..4c43b0d2d09f446ff181b01f538af45b
 +468	common	process_ksm_disable		sys_process_ksm_disable
 +469	common	process_ksm_status		sys_process_ksm_status
 diff --git a/arch/x86/Kconfig b/arch/x86/Kconfig
-index aeb95b6e5536916afb1f5c1dbbb373a565b840b9..088f7555e1ac086d7a6990aa6dd610b74b4a9582 100644
+index f86e7072a5ba3b022fec57dc9b43e1a98f000a7c..473364353bd9646ff173667e29c513067f353b9b 100644
 --- a/arch/x86/Kconfig
 +++ b/arch/x86/Kconfig
 @@ -277,7 +277,7 @@ config X86
@@ -1193,7 +1196,7 @@ index cc8c3bd0e7c297ac7a3bc05dc72acf6149a8ca4a..1f7c3082a36dbee1e36be16934eda032
 -	pv_ops.mmu.tlb_remove_table = tlb_remove_table;
  }
 diff --git a/arch/x86/include/asm/cpufeatures.h b/arch/x86/include/asm/cpufeatures.h
-index 508c0dad116bc42fbdf1cffee2758f824838a7c3..a5866bc0db8fd339eb5753b30bdca7c6a1ee200b 100644
+index b8fbd847c34afd264b8791044373e722b8632b9e..cc7825a4a3f5156712f22851f0a88fcae03cb56d 100644
 --- a/arch/x86/include/asm/cpufeatures.h
 +++ b/arch/x86/include/asm/cpufeatures.h
 @@ -338,6 +338,7 @@
@@ -1204,12 +1207,11 @@ index 508c0dad116bc42fbdf1cffee2758f824838a7c3..a5866bc0db8fd339eb5753b30bdca7c6
  #define X86_FEATURE_RDPRU		(13*32+ 4) /* "rdpru" Read processor register at user level */
  #define X86_FEATURE_WBNOINVD		(13*32+ 9) /* "wbnoinvd" WBNOINVD instruction */
  #define X86_FEATURE_AMD_IBPB		(13*32+12) /* Indirect Branch Prediction Barrier */
-@@ -534,4 +535,6 @@
- #define X86_BUG_RFDS			X86_BUG(1*32 + 2) /* "rfds" CPU is vulnerable to Register File Data Sampling */
- #define X86_BUG_BHI			X86_BUG(1*32 + 3) /* "bhi" CPU is affected by Branch History Injection */
+@@ -537,4 +538,5 @@
  #define X86_BUG_IBPB_NO_RET	   	X86_BUG(1*32 + 4) /* "ibpb_no_ret" IBPB omits return target predictions */
-+#define X86_BUG_SPECTRE_V2_USER		X86_BUG(1*32 + 5) /* "spectre_v2_user" CPU is affected by Spectre variant 2 attack between user processes */
-+#define X86_BUG_OLD_MICROCODE		X86_BUG(1*32 + 6) /* "old_microcode" CPU has old microcode, it is surely vulnerable to something */
+ #define X86_BUG_ITS			X86_BUG(1*32 + 5) /* "its" CPU is affected by Indirect Target Selection */
+ #define X86_BUG_ITS_NATIVE_ONLY		X86_BUG(1*32 + 6) /* "its_native_only" CPU is affected by ITS, VMX is not affected */
++#define X86_BUG_OLD_MICROCODE		X86_BUG(1*32 + 7) /* "old_microcode" CPU has old microcode, it is surely vulnerable to something */
  #endif /* _ASM_X86_CPUFEATURES_H */
 diff --git a/arch/x86/include/asm/disabled-features.h b/arch/x86/include/asm/disabled-features.h
 index c492bdc97b0595ec77f89dc9b0cefe5e3e64be41..be8c38855068f3122627babef12b02e17a102bed 100644
@@ -1340,7 +1342,7 @@ index 795fdd53bd0a6d587499e564fe23bc472be525d3..2398058b6e83cba9bc720f83a0951201
  
  extern void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 diff --git a/arch/x86/include/asm/msr-index.h b/arch/x86/include/asm/msr-index.h
-index 72765b2fe0d874b498fb77b90e2f121890ca49f0..1aacd6b68fab7b280f1d3bebe7aaf41d0fd5727b 100644
+index d4308e78a009a3a1d6fae64cc8bc9a64ecfa643d..63aa3a36bb5cc4d80b22c0a0cb4567e067d2db71 100644
 --- a/arch/x86/include/asm/msr-index.h
 +++ b/arch/x86/include/asm/msr-index.h
 @@ -25,15 +25,17 @@
@@ -1835,11 +1837,11 @@ index 70df203d814e02787a5fe16bc873ade481de4cb8..fea74def787d5bf2a8e20aba3f51f47f
  
  static const struct cpu_dev amd_cpu_dev = {
 diff --git a/arch/x86/kernel/cpu/bugs.c b/arch/x86/kernel/cpu/bugs.c
-index 9152285aaaf961383ada5f57777f4931d8dcdc04..3aaa5eb5aff259fd698391f05b514cc31cecf8e2 100644
+index b6994993c39f71ff381ef28f0a7ea7d55deb7ba5..5b8b5e0d4deb5e3e1e65f86be4c904d888d8eda7 100644
 --- a/arch/x86/kernel/cpu/bugs.c
 +++ b/arch/x86/kernel/cpu/bugs.c
-@@ -2806,6 +2806,14 @@ static ssize_t rfds_show_state(char *buf)
- 	return sysfs_emit(buf, "%s\n", rfds_strings[rfds_mitigation]);
+@@ -2960,6 +2960,14 @@ static ssize_t its_show_state(char *buf)
+ 	return sysfs_emit(buf, "%s\n", its_strings[its_mitigation]);
  }
  
 +static ssize_t old_microcode_show_state(char *buf)
@@ -1853,9 +1855,9 @@ index 9152285aaaf961383ada5f57777f4931d8dcdc04..3aaa5eb5aff259fd698391f05b514cc3
  static char *stibp_state(void)
  {
  	if (spectre_v2_in_eibrs_mode(spectre_v2_enabled) &&
-@@ -2988,6 +2996,9 @@ static ssize_t cpu_show_common(struct device *dev, struct device_attribute *attr
- 	case X86_BUG_RFDS:
- 		return rfds_show_state(buf);
+@@ -3145,6 +3153,9 @@ static ssize_t cpu_show_common(struct device *dev, struct device_attribute *attr
+ 	case X86_BUG_ITS:
+ 		return its_show_state(buf);
  
 +	case X86_BUG_OLD_MICROCODE:
 +		return old_microcode_show_state(buf);
@@ -1863,9 +1865,9 @@ index 9152285aaaf961383ada5f57777f4931d8dcdc04..3aaa5eb5aff259fd698391f05b514cc3
  	default:
  		break;
  	}
-@@ -3067,6 +3078,11 @@ ssize_t cpu_show_reg_file_data_sampling(struct device *dev, struct device_attrib
+@@ -3229,6 +3240,11 @@ ssize_t cpu_show_indirect_target_selection(struct device *dev, struct device_att
  {
- 	return cpu_show_common(dev, attr, buf, X86_BUG_RFDS);
+ 	return cpu_show_common(dev, attr, buf, X86_BUG_ITS);
  }
 +
 +ssize_t cpu_show_old_microcode(struct device *dev, struct device_attribute *attr, char *buf)
@@ -1876,11 +1878,11 @@ index 9152285aaaf961383ada5f57777f4931d8dcdc04..3aaa5eb5aff259fd698391f05b514cc3
  
  void __warn_thunk(void)
 diff --git a/arch/x86/kernel/cpu/common.c b/arch/x86/kernel/cpu/common.c
-index 7cce91b19fb2c5bf59fb09dd392e6f79c8a55a14..8d21887d66669f19b5deea9b76269f281e1ba37f 100644
+index 5e70a9984ccc62e7af34d983e2b0f27867d7e4e7..9329bde1207816349db57e4d63f3a2482159fe8d 100644
 --- a/arch/x86/kernel/cpu/common.c
 +++ b/arch/x86/kernel/cpu/common.c
-@@ -1317,10 +1317,52 @@ static bool __init vulnerable_to_rfds(u64 x86_arch_cap_msr)
- 	return cpu_matches(cpu_vuln_blacklist, RFDS);
+@@ -1350,10 +1350,52 @@ static bool __init vulnerable_to_its(u64 x86_arch_cap_msr)
+ 	return false;
  }
  
 +static struct x86_cpu_id cpu_latest_microcode[] = {
@@ -2205,7 +2207,7 @@ index 9b0ee41b545c7ec766274f00c8ccb5c3dcc3e108..1ddbd799acdf5e8fe985ec15782817d4
  #endif	/* CONFIG_PGTABLE_LEVELS > 4 */
  #endif	/* CONFIG_PGTABLE_LEVELS > 3 */
 diff --git a/arch/x86/mm/tlb.c b/arch/x86/mm/tlb.c
-index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb9413eb19eb 100644
+index 3c81edd54c5c4099da85d085e50cb212d2f393f3..71db10208b5eb7286fcf8a9830e5dbdddf2b9bf3 100644
 --- a/arch/x86/mm/tlb.c
 +++ b/arch/x86/mm/tlb.c
 @@ -74,13 +74,15 @@
@@ -2576,13 +2578,14 @@ index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb94
  		/*
  		 * If the CPU is not in lazy TLB mode, we are just switching
  		 * from one thread in a process to another thread in the same
-@@ -606,28 +899,33 @@ void switch_mm_irqs_off(struct mm_struct *unused, struct mm_struct *next,
+@@ -606,32 +899,34 @@ void switch_mm_irqs_off(struct mm_struct *unused, struct mm_struct *next,
  		 */
  		cond_mitigation(tsk);
  
 +		/*
-+		 * Let nmi_uaccess_okay() and finish_asid_transition()
-+		 * know that CR3 is changing.
++		 * Indicate that CR3 is about to change. nmi_uaccess_okay()
++		 * and others are sensitive to the window where mm_cpumask(),
++		 * CR3 and cpu_tlbstate.loaded_mm are not all in sync.
 +		 */
 +		this_cpu_write(cpu_tlbstate.loaded_mm, LOADED_MM_SWITCHING);
 +		barrier();
@@ -2602,7 +2605,11 @@ index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb94
  
  		choose_new_asid(next, next_tlb_gen, &new_asid, &need_flush);
 -
--		/* Let nmi_uaccess_okay() know that we're changing CR3. */
+-		/*
+-		 * Indicate that CR3 is about to change. nmi_uaccess_okay()
+-		 * and others are sensitive to the window where mm_cpumask(),
+-		 * CR3 and cpu_tlbstate.loaded_mm are not all in sync.
+- 		 */
 -		this_cpu_write(cpu_tlbstate.loaded_mm, LOADED_MM_SWITCHING);
 -		barrier();
  	}
@@ -2614,7 +2621,7 @@ index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb94
  		this_cpu_write(cpu_tlbstate.ctxs[new_asid].ctx_id, next->context.ctx_id);
  		this_cpu_write(cpu_tlbstate.ctxs[new_asid].tlb_gen, next_tlb_gen);
  		load_new_mm_cr3(next->pgd, new_asid, new_lam, true);
-@@ -746,46 +1044,58 @@ static void flush_tlb_func(void *info)
+@@ -750,46 +1045,58 @@ static void flush_tlb_func(void *info)
  	const struct flush_tlb_info *f = info;
  	struct mm_struct *loaded_mm = this_cpu_read(cpu_tlbstate.loaded_mm);
  	u32 loaded_mm_asid = this_cpu_read(cpu_tlbstate.loaded_mm_asid);
@@ -2674,7 +2681,7 @@ index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb94
  	if (unlikely(f->new_tlb_gen != TLB_GENERATION_INVALID &&
  		     f->new_tlb_gen <= local_tlb_gen)) {
  		/*
-@@ -953,7 +1263,7 @@ STATIC_NOPV void native_flush_tlb_multi(const struct cpumask *cpumask,
+@@ -972,7 +1279,7 @@ STATIC_NOPV void native_flush_tlb_multi(const struct cpumask *cpumask,
  	 * up on the new contents of what used to be page tables, while
  	 * doing a speculative memory access.
  	 */
@@ -2683,7 +2690,7 @@ index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb94
  		on_each_cpu_mask(cpumask, flush_tlb_func, (void *)info, true);
  	else
  		on_each_cpu_cond_mask(should_flush_tlb, flush_tlb_func,
-@@ -1000,111 +1310,151 @@ static struct flush_tlb_info *get_flush_tlb_info(struct mm_struct *mm,
+@@ -1019,111 +1326,151 @@ static struct flush_tlb_info *get_flush_tlb_info(struct mm_struct *mm,
  	BUG_ON(this_cpu_inc_return(flush_tlb_info_idx) != 1);
  #endif
  
@@ -2861,7 +2868,7 @@ index e491c75b2a68898ca364a6d0752347539894987d..d4ea9d4f7879514e3e482b3c2651cb94
  }
  
  /*
-@@ -1283,7 +1633,10 @@ void arch_tlbbatch_flush(struct arch_tlbflush_unmap_batch *batch)
+@@ -1302,7 +1649,10 @@ void arch_tlbbatch_flush(struct arch_tlbflush_unmap_batch *batch)
  	 * a local TLB flush is needed. Optimize this use-case by calling
  	 * flush_tlb_func_local() directly in this case.
  	 */
@@ -3082,13 +3089,13 @@ index 22afa4ff860d18561e1f0100857e001aa51a27f1..fd2718aa48bef657fde3a43db4a9e5d1
  
  module_param_named(skip_host_reset, ahci_skip_host_reset, int, 0444);
 diff --git a/drivers/base/cpu.c b/drivers/base/cpu.c
-index a7e5118498758ef05cc98cd87655dc0b64110193..1c4359366cd7602974c1b74519e3cca579af246a 100644
+index 50651435577c8f52fedd86e0b6c9edec84c2545d..381bf3b2163fac04e51ed7993046363f8b57be0b 100644
 --- a/drivers/base/cpu.c
 +++ b/drivers/base/cpu.c
-@@ -600,39 +600,42 @@ CPU_SHOW_VULN_FALLBACK(spec_rstack_overflow);
- CPU_SHOW_VULN_FALLBACK(gds);
+@@ -601,41 +601,44 @@ CPU_SHOW_VULN_FALLBACK(gds);
  CPU_SHOW_VULN_FALLBACK(reg_file_data_sampling);
  CPU_SHOW_VULN_FALLBACK(ghostwrite);
+ CPU_SHOW_VULN_FALLBACK(indirect_target_selection);
 +CPU_SHOW_VULN_FALLBACK(old_microcode);
  
  static DEVICE_ATTR(meltdown, 0444, cpu_show_meltdown, NULL);
@@ -3106,6 +3113,7 @@ index a7e5118498758ef05cc98cd87655dc0b64110193..1c4359366cd7602974c1b74519e3cca5
  static DEVICE_ATTR(gather_data_sampling, 0444, cpu_show_gds, NULL);
  static DEVICE_ATTR(reg_file_data_sampling, 0444, cpu_show_reg_file_data_sampling, NULL);
  static DEVICE_ATTR(ghostwrite, 0444, cpu_show_ghostwrite, NULL);
+ static DEVICE_ATTR(indirect_target_selection, 0444, cpu_show_indirect_target_selection, NULL);
 +static DEVICE_ATTR(old_microcode, 0444, cpu_show_old_microcode, NULL);
  
  static struct attribute *cpu_root_vulnerabilities_attrs[] = {
@@ -3124,6 +3132,7 @@ index a7e5118498758ef05cc98cd87655dc0b64110193..1c4359366cd7602974c1b74519e3cca5
  	&dev_attr_gather_data_sampling.attr,
  	&dev_attr_reg_file_data_sampling.attr,
  	&dev_attr_ghostwrite.attr,
+ 	&dev_attr_indirect_target_selection.attr,
 +	&dev_attr_old_microcode.attr,
  	NULL
  };
@@ -3221,7 +3230,7 @@ index 7c5c03f274b951af84a8f69689d55aa7a5448c77..a60b0a4faf29e5e93b23e04f52994657
  		if (!IS_ERR(pd))
  			goto put_device;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-index 98f0c12df12bc1af0eced62cfdc8cb27444ba2c4..33a9e7c0ced23fbac81ba3acf2aac79605951b92 100644
+index 416d2611fbf1c6949a84431e7ec9114954469012..7e0442447f6bd9b534a41896c601d36f06e27196 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 @@ -160,6 +160,7 @@ struct amdgpu_watchdog_timer {
@@ -3233,7 +3242,7 @@ index 98f0c12df12bc1af0eced62cfdc8cb27444ba2c4..33a9e7c0ced23fbac81ba3acf2aac796
  extern int amdgpu_gart_size;
  extern int amdgpu_gtt_size;
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
-index f2d77bc04e4a986b0147bc752353683002b35061..a3e33d97f89df3e51c3fa467977210b36f7ec7a8 100644
+index bb8ab25ea76ad6e0892fa32761e302fa46552899..713192aa8ce6f982fa30306176870fca8831cae7 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 @@ -139,6 +139,7 @@ enum AMDGPU_DEBUG_MASK {
@@ -5221,13 +5230,13 @@ index 8874f681b056751fa9be3bee4d1a12b86f8fd1b5..59eb72bf7d5fde0ce06f4f3ab740056b
  	[RLIMIT_RTTIME]		= {  RLIM_INFINITY,  RLIM_INFINITY },	\
  }
 diff --git a/include/linux/cpu.h b/include/linux/cpu.h
-index 6a0a8f1c7c90358f9e50ada3a1efd82a1506eacf..9532f7039780b1ca72f98137fe34978f1bc60c6a 100644
+index 7fdf9eb6b52d5821cde62b384fc048611b8561fb..5965c56a9c38c7c6fae8358709adb582abae5283 100644
 --- a/include/linux/cpu.h
 +++ b/include/linux/cpu.h
-@@ -78,6 +78,8 @@ extern ssize_t cpu_show_gds(struct device *dev,
- extern ssize_t cpu_show_reg_file_data_sampling(struct device *dev,
- 					       struct device_attribute *attr, char *buf);
+@@ -80,6 +80,8 @@ extern ssize_t cpu_show_reg_file_data_sampling(struct device *dev,
  extern ssize_t cpu_show_ghostwrite(struct device *dev, struct device_attribute *attr, char *buf);
+ extern ssize_t cpu_show_indirect_target_selection(struct device *dev,
+ 						  struct device_attribute *attr, char *buf);
 +extern ssize_t cpu_show_old_microcode(struct device *dev,
 +				      struct device_attribute *attr, char *buf);
  
@@ -5560,6 +5569,18 @@ index 7183e5aca28291a02cb186bcd8adba81b635b58f..56573371a2f8aff498768f0f3cbd17bb
  static inline struct user_namespace *get_user_ns(struct user_namespace *ns)
  {
  	return &init_user_ns;
+diff --git a/include/net/bluetooth/hci_core.h b/include/net/bluetooth/hci_core.h
+index 7d8bab892154eb22492da707e9d469d0bdcbaf92..e21abd869ce726a119355d822ef5bc5f69e5407e 100644
+--- a/include/net/bluetooth/hci_core.h
++++ b/include/net/bluetooth/hci_core.h
+@@ -1778,6 +1778,7 @@ struct hci_conn_params *hci_pend_le_action_lookup(struct list_head *list,
+ void hci_uuids_clear(struct hci_dev *hdev);
+ 
+ void hci_link_keys_clear(struct hci_dev *hdev);
++u8 *hci_conn_key_enc_size(struct hci_conn *conn);
+ struct link_key *hci_find_link_key(struct hci_dev *hdev, bdaddr_t *bdaddr);
+ struct link_key *hci_add_link_key(struct hci_dev *hdev, struct hci_conn *conn,
+ 				  bdaddr_t *bdaddr, u8 *val, u8 type,
 diff --git a/include/net/inet_connection_sock.h b/include/net/inet_connection_sock.h
 index c7f42844c79a9bde6d77c457f392229b1d3a9d5c..170250145598a97a8bb9dca8cf865b89f0c53f12 100644
 --- a/include/net/inet_connection_sock.h
@@ -5898,10 +5919,10 @@ index dbf896f3146c5fb2a35d68f8633fda4e0b74a6fb..92b6d6472951a569ceaf93f5e1caa832
  /*
   * Sender's congestion state indicating normal or abnormal situations
 diff --git a/init/Kconfig b/init/Kconfig
-index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7e56c15c9 100644
+index 522fac29949adb53c6945c302006092270078236..14deccce82bb237c52097692189e8e281eb4ca8f 100644
 --- a/init/Kconfig
 +++ b/init/Kconfig
-@@ -162,6 +162,44 @@ config THREAD_INFO_IN_TASK
+@@ -165,6 +165,44 @@ config THREAD_INFO_IN_TASK
  
  menu "General setup"
  
@@ -5946,7 +5967,7 @@ index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7
  config BROKEN
  	bool
  
-@@ -669,6 +707,7 @@ config TASK_IO_ACCOUNTING
+@@ -672,6 +710,7 @@ config TASK_IO_ACCOUNTING
  
  config PSI
  	bool "Pressure stall information tracking"
@@ -5954,7 +5975,7 @@ index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7
  	select KERNFS
  	help
  	  Collect metrics that indicate how overcommitted the CPU, memory,
-@@ -880,6 +919,35 @@ config UCLAMP_BUCKETS_COUNT
+@@ -883,6 +922,35 @@ config UCLAMP_BUCKETS_COUNT
  
  	  If in doubt, use the default value.
  
@@ -5990,7 +6011,7 @@ index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7
  endmenu
  
  #
-@@ -945,6 +1013,7 @@ config NUMA_BALANCING
+@@ -948,6 +1016,7 @@ config NUMA_BALANCING
  	depends on ARCH_SUPPORTS_NUMA_BALANCING
  	depends on !ARCH_WANT_NUMA_VARIABLE_LOCALITY
  	depends on SMP && NUMA && MIGRATION && !PREEMPT_RT
@@ -5998,7 +6019,7 @@ index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7
  	help
  	  This option adds support for automatic NUMA aware memory/task placement.
  	  The mechanism is quite primitive and is based on migrating memory when
-@@ -1328,6 +1397,22 @@ config USER_NS
+@@ -1331,6 +1400,22 @@ config USER_NS
  
  	  If unsure, say N.
  
@@ -6021,7 +6042,7 @@ index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7
  config PID_NS
  	bool "PID Namespaces"
  	default y
-@@ -1362,6 +1447,7 @@ config CHECKPOINT_RESTORE
+@@ -1365,6 +1450,7 @@ config CHECKPOINT_RESTORE
  
  config SCHED_AUTOGROUP
  	bool "Automatic process group scheduling"
@@ -6029,7 +6050,7 @@ index dc7b10a1fad2b7e3e6829499c2a72de122adf41f..8c764cacaec18423215c9f6780f531c7
  	select CGROUPS
  	select CGROUP_SCHED
  	select FAIR_GROUP_SCHED
-@@ -1470,6 +1556,12 @@ config CC_OPTIMIZE_FOR_PERFORMANCE
+@@ -1473,6 +1559,12 @@ config CC_OPTIMIZE_FOR_PERFORMANCE
  	  with the "-O2" compiler flag for best performance and most
  	  helpful compile-time warnings.
  
@@ -17976,7 +17997,7 @@ index 1b501db064172cf54f1b1259893dfba676473c56..f4debee063316331bc25976a1d8529b5
  
  #
 diff --git a/mm/huge_memory.c b/mm/huge_memory.c
-index 373781b21e5ca5cb7eb7de6c0b3f7016ebb713ef..e59ab1e165e32021c92c74122e8c2fb39f51747e 100644
+index 224925201ca2edd098e7e370b0bb00a3a60683bf..631193ab33c6ca7d2efb9e2cce18a3ea183a9535 100644
 --- a/mm/huge_memory.c
 +++ b/mm/huge_memory.c
 @@ -64,7 +64,11 @@ unsigned long transparent_hugepage_flags __read_mostly =
@@ -17992,10 +18013,10 @@ index 373781b21e5ca5cb7eb7de6c0b3f7016ebb713ef..e59ab1e165e32021c92c74122e8c2fb3
  	(1<<TRANSPARENT_HUGEPAGE_USE_ZERO_PAGE_FLAG);
  
 diff --git a/mm/internal.h b/mm/internal.h
-index 20b3535935a31b3f082c6056ab0c6a46ae3c3831..befc69031105b51b499885cceacdb39e65fdec3d 100644
+index ed34773efe3eae8129e33efb9dc413df984c9b61..d1595f9192f985cfe881af5dee9f9c07d8268d87 100644
 --- a/mm/internal.h
 +++ b/mm/internal.h
-@@ -741,6 +741,7 @@ void post_alloc_hook(struct page *page, unsigned int order, gfp_t gfp_flags);
+@@ -736,6 +736,7 @@ void post_alloc_hook(struct page *page, unsigned int order, gfp_t gfp_flags);
  extern bool free_pages_prepare(struct page *page, unsigned int order);
  
  extern int user_min_free_kbytes;
@@ -18004,7 +18025,7 @@ index 20b3535935a31b3f082c6056ab0c6a46ae3c3831..befc69031105b51b499885cceacdb39e
  struct page *__alloc_frozen_pages_noprof(gfp_t, unsigned int order, int nid,
  		nodemask_t *);
 diff --git a/mm/page_alloc.c b/mm/page_alloc.c
-index 542d25f77be80304b731411ffd29b276ee13be0c..653eee00e1915d9156cac8c80f931e80cf1ef2ec 100644
+index 74a996a3508e160dfe49b12fef1bdd22a16da135..98c0bd6ac5a610f28b072fe3fc111ff2c3b17cfe 100644
 --- a/mm/page_alloc.c
 +++ b/mm/page_alloc.c
 @@ -88,6 +88,8 @@ typedef int __bitwise fpi_t;
@@ -18028,7 +18049,7 @@ index 542d25f77be80304b731411ffd29b276ee13be0c..653eee00e1915d9156cac8c80f931e80
  static int watermark_scale_factor = 10;
  
  /* movable_zone is the "real" zone pages in ZONE_MOVABLE are taken from */
-@@ -4220,6 +4226,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
+@@ -4255,6 +4261,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
  	unsigned int cpuset_mems_cookie;
  	unsigned int zonelist_iter_cookie;
  	int reserve_flags;
@@ -18036,7 +18057,7 @@ index 542d25f77be80304b731411ffd29b276ee13be0c..653eee00e1915d9156cac8c80f931e80
  
  	if (unlikely(nofail)) {
  		/*
-@@ -4279,8 +4286,13 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
+@@ -4314,8 +4321,13 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
  			goto nopage;
  	}
  
@@ -18051,7 +18072,7 @@ index 542d25f77be80304b731411ffd29b276ee13be0c..653eee00e1915d9156cac8c80f931e80
  
  	/*
  	 * The adjusted alloc_flags might result in immediate success, so try
-@@ -4482,9 +4494,12 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
+@@ -4517,9 +4529,12 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
  		goto retry;
  	}
  fail:
@@ -18172,6 +18193,163 @@ index e9f3ae8158a660649ca85b3a17c8b8260cb11685..a18714a602734ea16b65e9ddb9870458
  			break;
  
  		/*
+diff --git a/net/bluetooth/hci_conn.c b/net/bluetooth/hci_conn.c
+index ae66fa0a5fb584f0c49141d1f96aa2bd0b15bd1f..a5cf428822fcd8829a3c5718a9584d1af53935d5 100644
+--- a/net/bluetooth/hci_conn.c
++++ b/net/bluetooth/hci_conn.c
+@@ -2897,3 +2897,27 @@ int hci_abort_conn(struct hci_conn *conn, u8 reason)
+ 	 */
+ 	return hci_cmd_sync_run_once(hdev, abort_conn_sync, conn, NULL);
+ }
++
++u8 *hci_conn_key_enc_size(struct hci_conn *conn)
++{
++	if (conn->type == ACL_LINK) {
++		struct link_key *key;
++
++		key = hci_find_link_key(conn->hdev, &conn->dst);
++		if (!key)
++			return NULL;
++
++		return &key->pin_len;
++	} else if (conn->type == LE_LINK) {
++		struct smp_ltk *ltk;
++
++		ltk = hci_find_ltk(conn->hdev, &conn->dst, conn->dst_type,
++				   conn->role);
++		if (!ltk)
++			return NULL;
++
++		return &ltk->enc_size;
++	}
++
++	return NULL;
++}
+diff --git a/net/bluetooth/hci_event.c b/net/bluetooth/hci_event.c
+index ab940ec698c0f565b783c4bb186462caa10d50b0..a46929e33783473e4e40ea9c768dddaac201187c 100644
+--- a/net/bluetooth/hci_event.c
++++ b/net/bluetooth/hci_event.c
+@@ -739,22 +739,33 @@ static u8 hci_cc_read_enc_key_size(struct hci_dev *hdev, void *data,
+ 			   handle);
+ 		conn->enc_key_size = 0;
+ 	} else {
++		u8 *key_enc_size = hci_conn_key_enc_size(conn);
++
+ 		conn->enc_key_size = rp->key_size;
+ 		status = 0;
+ 
+-		if (conn->enc_key_size < hdev->min_enc_key_size) {
++		/* Attempt to check if the key size is too small or if it has
++		 * been downgraded from the last time it was stored as part of
++		 * the link_key.
++		 */
++		if (conn->enc_key_size < hdev->min_enc_key_size ||
++		    (key_enc_size && conn->enc_key_size < *key_enc_size)) {
+ 			/* As slave role, the conn->state has been set to
+ 			 * BT_CONNECTED and l2cap conn req might not be received
+ 			 * yet, at this moment the l2cap layer almost does
+ 			 * nothing with the non-zero status.
+ 			 * So we also clear encrypt related bits, and then the
+ 			 * handler of l2cap conn req will get the right secure
+ 			 * state at a later time.
+ 			 */
+ 			status = HCI_ERROR_AUTH_FAILURE;
+ 			clear_bit(HCI_CONN_ENCRYPT, &conn->flags);
+ 			clear_bit(HCI_CONN_AES_CCM, &conn->flags);
+ 		}
++
++		/* Update the key encryption size with the connection one */
++		if (key_enc_size && *key_enc_size != conn->enc_key_size)
++			*key_enc_size = conn->enc_key_size;
+ 	}
+ 
+ 	hci_encrypt_cfm(conn, status);
+@@ -3062,6 +3073,34 @@ static void hci_inquiry_result_evt(struct hci_dev *hdev, void *edata,
+ 	hci_dev_unlock(hdev);
+ }
+ 
++static int hci_read_enc_key_size(struct hci_dev *hdev, struct hci_conn *conn)
++{
++	struct hci_cp_read_enc_key_size cp;
++	u8 *key_enc_size = hci_conn_key_enc_size(conn);
++
++	if (!read_key_size_capable(hdev)) {
++		conn->enc_key_size = HCI_LINK_KEY_SIZE;
++		return -EOPNOTSUPP;
++	}
++
++	bt_dev_dbg(hdev, "hcon %p", conn);
++
++	memset(&cp, 0, sizeof(cp));
++	cp.handle = cpu_to_le16(conn->handle);
++
++	/* If the key enc_size is already known, use it as conn->enc_key_size,
++	 * otherwise use hdev->min_enc_key_size so the likes of
++	 * l2cap_check_enc_key_size don't fail while waiting for
++	 * HCI_OP_READ_ENC_KEY_SIZE response.
++	 */
++	if (key_enc_size && *key_enc_size)
++		conn->enc_key_size = *key_enc_size;
++	else
++		conn->enc_key_size = hdev->min_enc_key_size;
++
++	return hci_send_cmd(hdev, HCI_OP_READ_ENC_KEY_SIZE, sizeof(cp), &cp);
++}
++
+ static void hci_conn_complete_evt(struct hci_dev *hdev, void *data,
+ 				  struct sk_buff *skb)
+ {
+@@ -3154,23 +3193,11 @@ static void hci_conn_complete_evt(struct hci_dev *hdev, void *data,
+ 		if (ev->encr_mode == 1 && !test_bit(HCI_CONN_ENCRYPT, &conn->flags) &&
+ 		    ev->link_type == ACL_LINK) {
+ 			struct link_key *key;
+-			struct hci_cp_read_enc_key_size cp;
+ 
+ 			key = hci_find_link_key(hdev, &ev->bdaddr);
+ 			if (key) {
+ 				set_bit(HCI_CONN_ENCRYPT, &conn->flags);
+-
+-				if (!read_key_size_capable(hdev)) {
+-					conn->enc_key_size = HCI_LINK_KEY_SIZE;
+-				} else {
+-					cp.handle = cpu_to_le16(conn->handle);
+-					if (hci_send_cmd(hdev, HCI_OP_READ_ENC_KEY_SIZE,
+-							 sizeof(cp), &cp)) {
+-						bt_dev_err(hdev, "sending read key size failed");
+-						conn->enc_key_size = HCI_LINK_KEY_SIZE;
+-					}
+-				}
+-
++				hci_read_enc_key_size(hdev, conn);
+ 				hci_encrypt_cfm(conn, ev->status);
+ 			}
+ 		}
+@@ -3609,24 +3636,8 @@ static void hci_encrypt_change_evt(struct hci_dev *hdev, void *data,
+ 
+ 	/* Try reading the encryption key size for encrypted ACL links */
+ 	if (!ev->status && ev->encrypt && conn->type == ACL_LINK) {
+-		struct hci_cp_read_enc_key_size cp;
+-
+-		/* Only send HCI_Read_Encryption_Key_Size if the
+-		 * controller really supports it. If it doesn't, assume
+-		 * the default size (16).
+-		 */
+-		if (!read_key_size_capable(hdev)) {
+-			conn->enc_key_size = HCI_LINK_KEY_SIZE;
++		if (hci_read_enc_key_size(hdev, conn))
+ 			goto notify;
+-		}
+-
+-		cp.handle = cpu_to_le16(conn->handle);
+-		if (hci_send_cmd(hdev, HCI_OP_READ_ENC_KEY_SIZE,
+-				 sizeof(cp), &cp)) {
+-			bt_dev_err(hdev, "sending read key size failed");
+-			conn->enc_key_size = HCI_LINK_KEY_SIZE;
+-			goto notify;
+-		}
+ 
+ 		goto unlock;
+ 	}
 diff --git a/net/ipv4/Kconfig b/net/ipv4/Kconfig
 index 6d2c97f8e9ef9c4187ac4ed3848640e9291e2bb7..ddc116ef22cb60db40e640677a84ac90045e468d 100644
 --- a/net/ipv4/Kconfig
