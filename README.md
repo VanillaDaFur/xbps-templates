@@ -10,3 +10,6 @@ Currently added templates
 | linux-zen               | 6.14.6              |
 | ttf-jetbrains-mono-nerd | 3.4.0               |
 | zen-browser             | 1.12.3b             |
+
+
+**[hyprland-void](https://github.com/Makrennel/hyprland-void)** for his nice build scripts
