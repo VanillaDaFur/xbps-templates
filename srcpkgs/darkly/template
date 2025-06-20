@@ -1,20 +1,27 @@
 # Template file for 'darkly'
 pkgname=darkly
 version=0.5.18
-revision=1
-arch=x86_64
-archs="x86_64"
-build_style=meta
-hostmakedepends="tar zstd"
+revision=2
+build_style=cmake
+configure_args="-DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON -DBUILD_QT6=ON -DBUILD_QT5=OFF"
+hostmakedepends="gettext extra-cmake-modules ninja flex bison glib-devel pkg-config"
+makedepends="gdk-pixbuf-devel libxkbcommon-devel pango-devel
+ wayland-protocols wayland-devel qt6-base-devel qt6-tools-devel kf6-kcmutils-devel
+ kf6-kconfigwidgets-devel kf6-kdecoration-devel kf6-kirigami-devel
+ kf6-kcoreaddons-devel kf6-kcolorscheme-devel kf6-kconfig-devel
+ kf6-kguiaddons-devel kf6-ki18n-devel kf6-kiconthemes-devel
+ kf6-kwindowsystem-devel kf6-frameworkintegration-devel kf6-karchive-devel
+ kf6-kcodecs-devel kf6-kwidgetsaddons-devel qt6-declarative-devel
+ qt6-svg-devel qt6-wayland-devel kf6-kwidgetsaddons-devel kf6-knotifications-devel"
+
+checkdepends="check-devel cppcheck xkeyboard-config"
 short_desc="Darkly QT theme, fork of lightly"
-maintainer="VanillaDaFur <SnowyDaFur@protonmail.com>"
+maintainer="VanillaDaFur <snowydafur@protonmail.com>"
 license="GPL-2.0-only"
 homepage="https://github.com/Bali10050/Darkly"
-distfiles="https://github.com/Bali10050/Darkly/releases/download/v${version}/darkly-${version}-${arch}.pkg.zst"
-checksum=3c6699b879468f93c4a86709d606f21aa471cf3cdc736ee441c2cacef8d90cc8
+distfiles="https://github.com/Bali10050/Darkly/archive/refs/tags/v${version}.tar.gz"
+checksum="f457ad77f344def425ae26f8f8484249a238170ac73f57e556207d0e3355cf0c"
 
-do_install() {
-	mkdir -p "${DESTDIR}"
-	tar -xvf ${XBPS_SRCDISTDIR}/${pkgname}-${version}/${pkgname}-${version}-${arch}.pkg.zst -C "${DESTDIR}"
+post_install() {
+	vlicense COPYING
 }
-

@@ -1,25 +1,46 @@
 # Template file for 'vesktop'
 pkgname=vesktop
-version=1.5.6
+version=1.5.7
 revision=1
 archs="x86_64"
-hostmakedepends="tar xz"
-short_desc="Custom Discord client with native wayland support and better performance"
-maintainer="VanillaDaFur <SnowyDaFur@protonmail.com>"
-license="GPL-3.0-or-later"
+wrksrc="Vesktop-${version}"
+hostmakedepends="nodejs pnpm git"
+depends="alsa-lib gtk+3 nss"
+short_desc="A standalone Electron-based Discord app with Vencord & improved Linux support"
+maintainer="Vanilla <SnowyDaFur@protonmail.com>"
+license="AGPL-3.0-only"
 homepage="https://github.com/Vencord/Vesktop"
-distfiles="https://github.com/Vencord/Vesktop/releases/download/v${version}/vesktop_${version}_amd64.deb"
-checksum=12ef0a41e0cdf6742d10727a87a380b27ccc2ca0f608372f16c652397a9a9a03
+distfiles="https://github.com/Vencord/Vesktop/archive/refs/tags/v${version}.tar.gz"
+checksum="5018a7df4c10bc95ff62234f94c903a56c2051f826adb1110bf3d00297e4a848"
 
-do_extract() {
-	ar x ${XBPS_SRCDISTDIR}/${pkgname}-${version}/vesktop_${version}_amd64.deb
-	tar xf data.tar.xz -C ${wrksrc}
+do_build() {
+  export NODE_ENV=production
+
+	cp "$FILESDIR/afterPack.js" "${wrksrc/afterPack.js}"
+
+	sed -i '/"beforePack": "scripts\/build\/sandboxFix.js",/a\
+    	"afterPack": "afterPack.js",' "${wrksrc}/package.json"
+
+  pnpm install
+  pnpm build
+  pnpm exec electron-builder --dir
 }
 
 do_install() {
-	vmkdir /usr/share
-	vmkdir /opt/Vesktop
+	# Main files
+  vmkdir usr/lib/vesktop
+  cp -r dist/linux-unpacked/* ${DESTDIR}/usr/lib/vesktop/
 
-	vcopy usr/share/* /usr/share/
-	vcopy opt/Vesktop/* /opt/Vesktop/
+	# Icons
+	for i in 16 32 48 64 128 256 512 1024; do
+		vinstall "${wrksrc}/dist/.icon-set/icon_${i}.png" 644 \
+			usr/share/icons/hicolor/${i}x${i}/apps vesktop.png
+	done
+
+	# Desktop file
+	vinstall "$FILESDIR/vesktop.desktop" 644 usr/share/applications
+
+	# Linking binary
+	vmkdir usr/bin
+  ln -sf /usr/lib/vesktop/vesktop ${DESTDIR}/usr/bin/vesktop
 }
