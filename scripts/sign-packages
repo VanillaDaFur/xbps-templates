@@ -9,7 +9,7 @@ COMMAND="
   curl \
     -H 'Authorization: token $PEM_PAT' \
     -H 'Accept: application/vnd.github.v3.raw' \
-    -O -L https://api.github.com/repos/$REPO_OWNER/hyprland-void-private-pem/contents/private.pem
+    -O -L https://api.github.com/repos/$REPO_OWNER/xbps-templates-private-pem/contents/private.pem
 
   # Sign packages
   xbps-rindex --privkey /work/private.pem --sign --signedby \"$REPO_NAME-github-action\" /work/packages

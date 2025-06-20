@@ -6,11 +6,9 @@ COMMAND="
   mkdir /work/packages
   
   cp /work/hostdir/binpkgs/darkly*.xbps /work/packages
-  cp /work/hostdir/binpkgs/linux6.14-zen*.xbps /work/packages
   cp /work/hostdir/binpkgs/rofi-wayland*.xbps /work/packages
   cp /work/hostdir/binpkgs/ttf-jetbrains-mono-nerd*.xbps /work/packages
   cp /work/hostdir/binpkgs/vesktop*.xbps /work/packages
-  cp /work/hostdir/binpkgs/zen-browser*.xbps /work/packages
 
   cd /work/packages
   xbps-rindex -a *
