@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    name: Build Hyprland
+    name: Build Packages
     runs-on: ubuntu-latest
 
     container:
@@ -17,7 +17,7 @@ jobs:
 
     strategy:
       matrix:
-        arch: [ x86_64, aarch64]
+        arch: [ x86_64, x86_64-musl, aarch64, aarch64-musl ]
     env:
       REPO_OWNER: "${{ github.repository_owner }}"
       REPO_NAME: "${{ github.event.repository.name }}"
