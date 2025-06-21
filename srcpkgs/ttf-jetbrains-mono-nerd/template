@@ -4,7 +4,6 @@ version=3.4.0
 revision=1
 arch=x86_64
 archs="x86_64"
-build_style=meta
 hostmakedepends="unzip"
 depends="font-util"
 short_desc="Patched font JetBrains Mono from nerd fonts library"

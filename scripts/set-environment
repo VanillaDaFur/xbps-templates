@@ -1,6 +1,10 @@
 #!/usr/bin/env sh
 
 COMMAND="
+  [ \"${TARGET_ARCH##*-musl}\" ] \
+    && echo \"RESULT_NAME=$TARGET_ARCH-glibc\" >> \"$GITHUB_ENV\" \
+    || echo \"RESULT_NAME=$TARGET_ARCH\" >> \"$GITHUB_ENV\"
+
   [ \"$TARGET_ARCH\" != \"x86_64\" ] \
     && echo \"BUILD_ARGS=$BUILD_ARGS -a $TARGET_ARCH\" >> \"$GITHUB_ENV\" \
     || true
@@ -8,3 +12,4 @@ COMMAND="
 
 echo "Running command: $COMMAND"
 sh -c "$COMMAND"
+
