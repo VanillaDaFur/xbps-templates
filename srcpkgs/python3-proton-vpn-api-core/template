@@ -6,7 +6,7 @@ revision=1
 wrksrc="${pkgname}-${version}"
 
 hostmakedepends="python3-setuptools python3-packaging-bootstrap"
-depends="python3 python3-distro python3-proton-core python3-pynacl python3-sentry"
+depends="python3 python3-distro python3-proton-core python3-pynacl python3-sentry python3-cryptography"
 short_desc="The proton-vpn-core-api acts as a facade to the other Proton VPN components, exposing a uniform API to the available Proton VPN services."
 maintainer="VanillaDaFur <snowydafur@protonmail.com>"
 license="GPL-3.0-or-later"
