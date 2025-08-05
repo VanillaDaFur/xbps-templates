@@ -1,7 +1,7 @@
 # Template file for 'darkly'
 pkgname=darkly
-version=0.5.18
-revision=2
+version=0.5.22
+revision=1
 build_style=cmake
 configure_args="-DBUILD_TESTING=OFF -DKDE_INSTALL_USE_QT_SYS_PATHS=ON -DBUILD_QT6=ON -DBUILD_QT5=OFF"
 hostmakedepends="gettext extra-cmake-modules ninja flex bison glib-devel pkg-config"
@@ -20,7 +20,7 @@ maintainer="VanillaDaFur <snowydafur@protonmail.com>"
 license="GPL-2.0-only"
 homepage="https://github.com/Bali10050/Darkly"
 distfiles="https://github.com/Bali10050/Darkly/archive/refs/tags/v${version}.tar.gz"
-checksum="f457ad77f344def425ae26f8f8484249a238170ac73f57e556207d0e3355cf0c"
+checksum="cd6a34ee054dacba6ee8cad15a969dd83d7ab3653eb2665c261d441b21092ace"
 
 post_install() {
 	vlicense COPYING
