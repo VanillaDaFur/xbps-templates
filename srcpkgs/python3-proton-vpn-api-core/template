@@ -1,0 +1,23 @@
+# Template file for 'python3-proton-vpn-api-core'
+pkgname=python3-proton-vpn-api-core
+version=0.42.5
+revision=1
+
+wrksrc="${pkgname}-${version}"
+
+hostmakedepends="python3-setuptools python3-packaging-bootstrap"
+depends="python3 python3-distro python3-proton-core python3-pynacl python3-sentry"
+short_desc="The proton-vpn-core-api acts as a facade to the other Proton VPN components, exposing a uniform API to the available Proton VPN services."
+maintainer="VanillaDaFur <snowydafur@protonmail.com>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/ProtonVPN/python-proton-vpn-api-core"
+distfiles="https://github.com/ProtonVPN/python-proton-vpn-api-core/archive/refs/tags/v${version}.tar.gz"
+checksum="79aa13e44fffb6d53c7ac7051cfd8b8631cd96156f3bd05ba76fc057a2e13994"
+
+do_build() {
+    python setup.py build
+}
+
+do_install() {
+    python setup.py install --root="${DESTDIR}" --optimize=1
+}

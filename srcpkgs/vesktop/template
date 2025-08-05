@@ -1,6 +1,6 @@
 # Template file for 'vesktop'
 pkgname=vesktop
-version=1.5.7
+version=1.5.8
 revision=1
 archs="x86_64"
 wrksrc="Vesktop-${version}"
@@ -11,7 +11,7 @@ maintainer="Vanilla <SnowyDaFur@protonmail.com>"
 license="AGPL-3.0-only"
 homepage="https://github.com/Vencord/Vesktop"
 distfiles="https://github.com/Vencord/Vesktop/archive/refs/tags/v${version}.tar.gz"
-checksum="5018a7df4c10bc95ff62234f94c903a56c2051f826adb1110bf3d00297e4a848"
+checksum="63fd9df5259e0cf404caf8005adde43b85fc81550aa303d103501a3c79599957"
 
 do_build() {
   export NODE_ENV=production

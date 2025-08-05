@@ -1,0 +1,37 @@
+# Template file for 'python3-proton-vpn-local-agent'
+pkgname=python3-proton-vpn-local-agent
+version=1.4.5
+revision=1
+
+wrksrc="${pkgname}"
+
+hostmakedepends="pkg-config python3"
+makedepends="rust cargo gcc python3-packaging-bootstrap"
+depends="python3 libgcc"
+short_desc="Proton VPN local agent written in Rust"
+maintainer="VanillaDaFur <snowydafur@protonmail.com>"
+license="GPL-3.0-or-later"
+homepage="https://github.com/ProtonVPN/local-agent-rs"
+distfiles="https://github.com/ProtonVPN/local-agent-rs/archive/refs/tags/${version}.tar.gz"
+checksum="6d2fc6e0517d1559c6ddfab386b3138721afc44c8a827b8395138d88564ba284"
+
+do_configure() {
+    cd ${wrksrc}/python-proton-vpn-local-agent
+    cargo fetch --locked
+}
+
+do_build() {
+    cd ${wrksrc}/python-proton-vpn-local-agent
+    cargo build --release --frozen --all-features
+}
+
+do_check() {
+    cd ${wrksrc}/python-proton-vpn-local-agent
+    cargo test --release --frozen --all-features
+}
+
+do_install() {
+    vtargetdir="usr/lib/$(python3 -c 'import sys; print("python" + ".".join(map(str, sys.version_info[:2])))')/site-packages/proton/vpn"
+    vmkdir "${vtargetdir}"
+    vinstall python-proton-vpn-local-agent/target/release/libpython_proton_vpn_local_agent.so 755 "${vtargetdir}" local_agent.abi3.so
+}

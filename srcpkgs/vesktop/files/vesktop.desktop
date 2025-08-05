@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=Vesktop
-Exec=/usr/lib/vesktop %U
+Exec=/usr/bin/vesktop %U
 Terminal=false
 Type=Application
 Icon=vesktop
