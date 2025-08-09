@@ -5,10 +5,14 @@
 COMMAND="
   mkdir /work/packages
   
-  cp /work/hostdir/binpkgs/darkly*.xbps /work/packages
-  cp /work/hostdir/binpkgs/rofi-wayland*.xbps /work/packages
-  cp /work/hostdir/binpkgs/ttf-jetbrains-mono-nerd*.xbps /work/packages
-  cp /work/hostdir/binpkgs/vesktop*.xbps /work/packages
+  for pkg in /work/\"\$REPO_NAME\"/srcpkgs/*; do
+    name=\$(basename \"\$pkg\")
+
+    # Make copying more verbose so it will be easier to catch errors
+    echo \"Copying \$name\"
+
+    cp /work/hostdir/binpkgs/\"\$name\"*.xbps /work/packages 2>/dev/null || true
+  done
 
   cd /work/packages
   xbps-rindex -a *
